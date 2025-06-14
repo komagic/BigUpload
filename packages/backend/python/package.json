@@ -1,0 +1,17 @@
+{
+    "name": "@bigupload/backend-python",
+    "version": "1.0.0",
+    "description": "大文件上传Python后端",
+    "main": "index.js",
+    "scripts": {
+        "dev": "python src/app.py",
+        "start": "python src/app.py"
+    },
+    "dependencies": {
+        "@bigupload/shared": "1.0.0"
+    },
+    "devDependencies": {},
+    "peerDependencies": {
+        "python": ">=3.7.0"
+    }
+}

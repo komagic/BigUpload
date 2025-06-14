@@ -1,0 +1,29 @@
+{
+    "name": "@bigupload/demo-react",
+    "version": "1.0.0",
+    "private": true,
+    "scripts": {
+        "dev": "vite",
+        "build": "tsc && vite build",
+        "serve": "vite preview"
+    },
+    "dependencies": {
+        "@bigupload/react": "1.0.0",
+        "@bigupload/shared": "1.0.0",
+        "axios": "^1.9.0",
+        "react": "^18.2.0",
+        "react-dom": "^18.2.0",
+        "spark-md5": "^3.0.2",
+        "uuid": "^11.1.0"
+    },
+    "devDependencies": {
+        "@types/node": "^18.19.111",
+        "@types/react": "^18.0.0",
+        "@types/react-dom": "^18.0.0",
+        "@types/spark-md5": "^3.0.5",
+        "@types/uuid": "^9.0.8",
+        "@vitejs/plugin-react": "^3.1.0",
+        "typescript": "^5.0.2",
+        "vite": "^4.3.9"
+    }
+}

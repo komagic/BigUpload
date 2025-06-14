@@ -1,0 +1,14 @@
+{
+    "name": "@bigupload/shared",
+    "version": "1.0.0",
+    "main": "dist/index.js",
+    "types": "dist/index.d.ts",
+    "scripts": {
+        "build": "tsc",
+        "dev": "tsc --watch"
+    },
+    "devDependencies": {
+        "@types/node": "^18.19.111",
+        "typescript": "^5.0.4"
+    }
+}

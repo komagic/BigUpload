@@ -1,0 +1,73 @@
+# Node.js依赖
+node_modules/
+npm-debug.log
+yarn-debug.log
+yarn-error.log
+.pnp/
+.pnp.js
+
+# 构建输出
+dist/
+out/
+build/
+coverage/
+
+# IDE配置
+.idea/
+.vscode/
+*.sublime-*
+.vs/
+
+# 环境变量
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# 系统文件
+.DS_Store
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# 日志
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# 缓存
+.tmp/
+.temp/
+.cache/
+.turbo/
+
+# 上传文件
+packages/backend/*/uploads/
+
+# Java编译文件
+target/
+*.class
+*.jar
+*.war
+*.ear
+*.zip
+*.tar.gz
+*.rar
+hs_err_pid*
+
+# Python缓存
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+virtualenv/
+ENV/
+.venv/
+.env3/
+.python-version

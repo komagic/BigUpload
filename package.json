@@ -1,0 +1,43 @@
+{
+  "name": "bigupload",
+  "version": "1.0.0",
+  "description": "大文件上传组件",
+  "private": true,
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ],
+  "scripts": {
+    "dev": "turbo run dev",
+    "build": "turbo run build",
+    "test": "turbo run test",
+    "lint": "turbo run lint",
+    "start:react": "cd apps/demo-react && npm run dev",
+    "start:node": "cd packages/backend/node && npm run dev",
+    "start:python": "cd packages/backend/python && npm run start",
+    "start:java": "cd apps/demo-java && mvn spring-boot:run",
+    "start:python-demo": "cd apps/demo-python && python main.py",
+    "demo": "turbo run dev --filter=@bigupload/demo-react --filter=@bigupload/backend-node",
+    "demo:java": "echo 'Starting Java demo...' && cd apps/demo-java && mvn spring-boot:run",
+    "demo:python": "echo 'Starting Python demo...' && cd apps/demo-python && python main.py",
+    "install:python": "cd packages/backend/python && pip install -e .",
+    "install:java": "cd packages/backend/java && mvn install"
+  },
+  "keywords": [
+    "upload",
+    "large-file",
+    "chunk-upload",
+    "monorepo"
+  ],
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "@types/uuid": "^9.0.1",
+    "turbo": "^1.10.16"
+  },
+  "dependencies": {
+    "@ant-design/icons": "^6.0.0",
+    "antd": "^5.26.0",
+    "uuid": "^11.1.0"
+  }
+}
