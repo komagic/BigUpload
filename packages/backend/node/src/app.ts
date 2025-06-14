@@ -26,8 +26,36 @@ const TEMP_DIR = path.resolve(UPLOAD_DIR, "temp");
 fs.ensureDirSync(UPLOAD_DIR);
 fs.ensureDirSync(TEMP_DIR);
 
-// 文件元数据存储（实际生产环境应使用数据库）
+// 文件元数据存储（内存 + 文件持久化）
 const fileMetadata: Record<string, any> = {};
+
+// 元数据持久化文件路径
+const METADATA_FILE = path.resolve(TEMP_DIR, "metadata.json");
+
+// 加载元数据
+const loadMetadata = async () => {
+  try {
+    if (await fs.pathExists(METADATA_FILE)) {
+      const data = await fs.readJson(METADATA_FILE);
+      Object.assign(fileMetadata, data);
+      console.log(`加载元数据: ${Object.keys(fileMetadata).length} 个文件`);
+    }
+  } catch (error) {
+    console.error("加载元数据失败:", error);
+  }
+};
+
+// 保存元数据
+const saveMetadata = async () => {
+  try {
+    await fs.writeJson(METADATA_FILE, fileMetadata, { spaces: 2 });
+  } catch (error) {
+    console.error("保存元数据失败:", error);
+  }
+};
+
+// 启动时加载元数据
+loadMetadata();
 
 // 配置multer用于处理文件上传
 const storage = multer.diskStorage({
@@ -185,6 +213,8 @@ app.post("/upload-chunk", upload.single("chunk"), async (req, res) => {
         fileHash,
         chunkTotal: parseInt(chunkTotal),
         uploadedChunks: [],
+        createdAt: new Date().toISOString(),
+        lastUpdated: new Date().toISOString(),
       };
     }
 
@@ -196,6 +226,10 @@ app.post("/upload-chunk", upload.single("chunk"), async (req, res) => {
 
     if (!fileMetadata[fileId].uploadedChunks.includes(chunkIdx)) {
       fileMetadata[fileId].uploadedChunks.push(chunkIdx);
+      fileMetadata[fileId].lastUpdated = new Date().toISOString();
+
+      // 异步保存元数据，不阻塞响应
+      saveMetadata().catch((err) => console.error("保存元数据失败:", err));
     }
 
     console.log(
@@ -386,6 +420,9 @@ app.post("/merge-chunks", async (req, res) => {
     // 删除文件元数据
     delete fileMetadata[fileId];
 
+    // 异步保存元数据更新
+    saveMetadata().catch((err) => console.error("保存元数据失败:", err));
+
     const fileUrl = `/files/${targetFilename}`;
     return res.json({
       success: true,
@@ -396,6 +433,73 @@ app.post("/merge-chunks", async (req, res) => {
   } catch (error) {
     console.error("合并文件错误:", error);
     return res.status(500).json({
+      success: false,
+      message: (error as Error).message || "服务器错误",
+    });
+  }
+});
+
+// 清理过期的元数据
+app.post("/cleanup", async (req, res) => {
+  try {
+    const now = new Date();
+    const expiredTime = 24 * 60 * 60 * 1000; // 24小时
+    let cleanedCount = 0;
+
+    for (const [fileId, metadata] of Object.entries(fileMetadata)) {
+      const lastUpdated = new Date(metadata.lastUpdated || metadata.createdAt);
+      if (now.getTime() - lastUpdated.getTime() > expiredTime) {
+        // 清理临时文件
+        const fileDir = path.resolve(TEMP_DIR, fileId);
+        if (await fs.pathExists(fileDir)) {
+          await fs.remove(fileDir);
+        }
+
+        // 删除元数据
+        delete fileMetadata[fileId];
+        cleanedCount++;
+      }
+    }
+
+    if (cleanedCount > 0) {
+      await saveMetadata();
+    }
+
+    res.json({
+      success: true,
+      message: `清理了 ${cleanedCount} 个过期文件`,
+      cleanedCount,
+    });
+  } catch (error) {
+    console.error("清理元数据错误:", error);
+    res.status(500).json({
+      success: false,
+      message: (error as Error).message || "服务器错误",
+    });
+  }
+});
+
+// 获取上传状态
+app.get("/status/:fileId", (req, res) => {
+  try {
+    const fileId = req.params.fileId;
+    const metadata = fileMetadata[fileId];
+
+    if (!metadata) {
+      return res.status(404).json({
+        success: false,
+        message: "文件元数据不存在",
+      });
+    }
+
+    res.json({
+      success: true,
+      fileId,
+      ...metadata,
+    });
+  } catch (error) {
+    console.error("获取状态错误:", error);
+    res.status(500).json({
       success: false,
       message: (error as Error).message || "服务器错误",
     });

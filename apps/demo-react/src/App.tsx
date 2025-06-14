@@ -483,12 +483,14 @@ const App: React.FC = () => {
               <BigAntUploader
                 ref={uploaderRef}
                 baseUrl={API_BASE_URL}
-                maxFileSize={1024 * 1024 * 1024} // 1GB
-                chunkSize={2 * 1024 * 1024} // 2MB
-                concurrent={3}
+                maxFileSize={2 * 1024 * 1024 * 1024} // 2GB
+                chunkSize={5 * 1024 * 1024} // 5MB，大文件使用更大的分片
+                concurrent={1} // 大文件使用单线程上传，避免服务器压力
+                retryCount={10} // 大幅增加重试次数
+                retryDelay={3000} // 增加重试延迟到3秒
                 accept={[PREDEFINED_TYPES.ALL]}
                 title="分片上传"
-                description="支持大文件分片上传、断点续传、秒传"
+                description="支持大文件分片上传、断点续传、秒传、自动恢复"
                 showDragger={true}
                 debug={true}
                 showFileList={true}

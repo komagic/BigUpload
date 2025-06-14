@@ -106,7 +106,23 @@ export class BigUploadEngine {
       ...config,
     };
 
+    // 根据文件大小动态调整并发数
+    this.adjustConcurrencyForLargeFiles();
+
     this.log("BigUploadEngine initialized", this.config);
+  }
+
+  private adjustConcurrencyForLargeFiles(): void {
+    // 对于大文件，降低并发数以减少服务器压力
+    if (this.config.concurrent > 2) {
+      this.config.concurrent = Math.max(
+        1,
+        Math.floor(this.config.concurrent / 2)
+      );
+      this.log("Adjusted concurrency for large files", {
+        concurrent: this.config.concurrent,
+      });
+    }
   }
 
   /**
@@ -149,7 +165,7 @@ export class BigUploadEngine {
       throw new Error(`File not found: ${fileId}`);
     }
 
-    if (fileState.status !== "pending") {
+    if (fileState.status !== "pending" && fileState.status !== "error") {
       this.log("File upload already started or completed", {
         fileId,
         status: fileState.status,
@@ -233,7 +249,10 @@ export class BigUploadEngine {
    */
   async resumeUpload(fileId: string): Promise<void> {
     const fileState = this.files.get(fileId);
-    if (!fileState || fileState.status !== "paused") {
+    if (
+      !fileState ||
+      (fileState.status !== "paused" && fileState.status !== "error")
+    ) {
       return;
     }
 
@@ -430,18 +449,53 @@ export class BigUploadEngine {
     const abortController = new AbortController();
     this.abortControllers.set(fileId, abortController);
 
-    try {
-      await this.request("/upload-chunk", {
-        method: "POST",
-        body: formData,
-        signal: abortController.signal,
-      });
+    let lastError: any;
 
-      // 更新进度
-      this.updateProgress(fileId, chunkIndex);
-    } finally {
-      this.abortControllers.delete(fileId);
+    // 实现重试机制
+    for (let attempt = 0; attempt <= this.config.retryCount; attempt++) {
+      try {
+        this.log(
+          `Uploading chunk ${chunkIndex}, attempt ${attempt + 1}/${
+            this.config.retryCount + 1
+          }`
+        );
+
+        await this.request("/upload-chunk", {
+          method: "POST",
+          body: formData,
+          signal: abortController.signal,
+        });
+
+        // 上传成功，更新进度
+        this.updateProgress(fileId, chunkIndex);
+        this.abortControllers.delete(fileId);
+        return;
+      } catch (error) {
+        lastError = error;
+        this.log(
+          `Chunk ${chunkIndex} upload failed, attempt ${attempt + 1}`,
+          error
+        );
+
+        // 如果是最后一次尝试，或者是不可重试的错误，直接抛出
+        if (
+          attempt === this.config.retryCount ||
+          abortController.signal.aborted
+        ) {
+          break;
+        }
+
+        // 等待重试延迟
+        if (this.config.retryDelay > 0) {
+          await new Promise((resolve) =>
+            setTimeout(resolve, this.config.retryDelay)
+          );
+        }
+      }
     }
+
+    this.abortControllers.delete(fileId);
+    throw lastError;
   }
 
   private async mergeChunks(fileId: string): Promise<any> {
@@ -508,21 +562,47 @@ export class BigUploadEngine {
     concurrency: number
   ): Promise<void> {
     const executing: Promise<void>[] = [];
+    const errors: any[] = [];
 
     for (const task of tasks) {
-      const promise = task();
+      const promise = task().catch((error) => {
+        errors.push(error);
+        throw error;
+      });
       executing.push(promise);
 
       if (executing.length >= concurrency) {
-        await Promise.race(executing);
-        executing.splice(
-          executing.findIndex((p) => p === promise),
-          1
-        );
+        try {
+          await Promise.race(executing);
+        } catch (error) {
+          // 忽略单个任务的错误，继续执行其他任务
+        }
+
+        // 移除已完成的任务（无论成功还是失败）
+        const settled = await Promise.allSettled(executing);
+        for (let i = executing.length - 1; i >= 0; i--) {
+          if (
+            settled[i].status === "fulfilled" ||
+            settled[i].status === "rejected"
+          ) {
+            executing.splice(i, 1);
+          }
+        }
       }
     }
 
-    await Promise.all(executing);
+    // 等待所有剩余任务完成
+    try {
+      await Promise.all(executing);
+    } catch (error) {
+      // 忽略，错误已经在上面收集了
+    }
+
+    // 如果有错误，抛出第一个错误
+    if (errors.length > 0) {
+      this.log(`${errors.length} chunks failed to upload`);
+      throw errors[0];
+    }
   }
 
   private updateFileState(
@@ -563,6 +643,30 @@ export class BigUploadEngine {
       details: error,
     };
 
+    // 如果是文件元数据不存在的错误，尝试自动恢复
+    if (error.message && error.message.includes("文件元数据不存在")) {
+      this.log("File metadata not found, attempting auto-recovery", { fileId });
+      this.attemptAutoRecovery(fileId, uploadError);
+      return;
+    }
+
+    // 如果是网络错误或服务器错误，标记为可重试
+    if (
+      error.message &&
+      (error.message.includes("fetch") ||
+        error.message.includes("network") ||
+        error.message.includes("timeout") ||
+        error.message.includes("500") ||
+        error.message.includes("502") ||
+        error.message.includes("503"))
+    ) {
+      uploadError.retryable = true;
+      this.log("Network/Server error detected, marking as retryable", {
+        fileId,
+        error,
+      });
+    }
+
     this.updateFileState(fileId, {
       status: "error",
       error: uploadError,
@@ -570,6 +674,54 @@ export class BigUploadEngine {
 
     this.emitEvent("error", { fileId, error: uploadError });
     this.log("Upload error", { fileId, error: uploadError });
+  }
+
+  private async attemptAutoRecovery(
+    fileId: string,
+    error: UploadError
+  ): Promise<void> {
+    try {
+      this.log("Starting auto-recovery process", { fileId });
+
+      // 重置文件状态
+      this.updateFileState(fileId, {
+        status: "pending",
+        error: undefined,
+        progress: {
+          ...this.files.get(fileId)!.progress,
+          loaded: 0,
+          percent: 0,
+          uploadedChunks: 0,
+        },
+      });
+
+      // 延迟一段时间后自动重新开始上传
+      setTimeout(async () => {
+        try {
+          await this.startUpload(fileId);
+        } catch (retryError: any) {
+          this.log("Auto-recovery failed", { fileId, retryError });
+          this.updateFileState(fileId, {
+            status: "error",
+            error: {
+              ...error,
+              message: `自动恢复失败: ${retryError.message || retryError}`,
+            },
+          });
+          this.emitEvent("error", { fileId, error });
+        }
+      }, 3000); // 3秒后重试
+    } catch (recoveryError: any) {
+      this.log("Auto-recovery setup failed", { fileId, recoveryError });
+      this.updateFileState(fileId, {
+        status: "error",
+        error: {
+          ...error,
+          message: `恢复设置失败: ${recoveryError.message || recoveryError}`,
+        },
+      });
+      this.emitEvent("error", { fileId, error });
+    }
   }
 
   private emitEvent<T = any>(event: UploadEventType, data: T): void {
