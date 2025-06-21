@@ -10,7 +10,9 @@
 
 **支持分片上传、断点续传、秒传的多语言实现方案**
 
-[快速开始](#快速开始) • [后端包](#后端包) • [前端组件](#前端组件) • [演示](#演示)
+- [Node.js 部署指南](docs/node-backend.md#部署说明)
+- [Python 部署指南](docs/python-backend.md#部署说明)  
+- [Java 部署指南](docs/java-backend.md#部署说明)
 
 </div>
 
@@ -44,13 +46,7 @@ cd bigupload
 open test-all-backends.html
 ```
 
-### 单独部署
 
-选择你需要的后端，查看对应文档：
-
-- [Node.js 部署指南](docs/node-backend.md#部署说明)
-- [Python 部署指南](docs/python-backend.md#部署说明)  
-- [Java 部署指南](docs/java-backend.md#部署说明)
   
 ### 服务地址
 
