@@ -17,10 +17,10 @@ echo ""
 
 # 检查 Java 安装状态
 echo "☕ 检查 Java 安装状态..."
-if command -v java &> /dev/null; then
+if command -v java &>/dev/null; then
     echo "✅ Java 已安装:"
     java --version
-    
+
     # 检查 JAVA_HOME
     if [ -z "$JAVA_HOME" ]; then
         echo "⚠️  JAVA_HOME 未设置"
@@ -36,7 +36,7 @@ if command -v java &> /dev/null; then
     fi
 else
     echo "❌ Java 未安装或未在 PATH 中"
-    
+
     # 检查 Homebrew 中是否有 Java
     if brew list | grep -q openjdk; then
         echo "🔧 Java 已通过 Homebrew 安装，但可能需要链接："
@@ -52,12 +52,12 @@ echo ""
 
 # 检查 Maven 安装状态
 echo "📦 检查 Maven 安装状态..."
-if command -v mvn &> /dev/null; then
+if command -v mvn &>/dev/null; then
     echo "✅ Maven 已安装:"
     mvn --version
 else
     echo "❌ Maven 未安装或未在 PATH 中"
-    
+
     # 检查 Homebrew 中是否有 Maven
     if brew list | grep -q maven; then
         echo "🔧 Maven 已通过 Homebrew 安装，但可能需要重新加载 shell"
@@ -72,7 +72,7 @@ echo ""
 
 # 提供下一步建议
 echo "🚀 下一步建议:"
-if command -v java &> /dev/null && command -v mvn &> /dev/null; then
+if command -v java &>/dev/null && command -v mvn &>/dev/null; then
     echo "✅ Java 和 Maven 都已安装，可以启动完整服务："
     echo "   ./start-all-servers.sh"
 else
@@ -81,4 +81,4 @@ else
     echo ""
     echo "🔄 继续检查安装状态："
     echo "   ./check-maven.sh"
-fi 
+fi
