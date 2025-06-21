@@ -90,8 +90,7 @@ export const version = "1.0.0";
 export const defaultConfig: Partial<UploadConfig> = {
   chunkSize: 2 * 1024 * 1024, // 2MB
   concurrent: 3,
-  retryCount: 3,
-  retryDelay: 1000,
+  retryDelays: [0, 1000, 3000, 5000], // 重试延迟数组
   debug: false,
 };
 

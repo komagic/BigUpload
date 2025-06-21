@@ -62,8 +62,7 @@ export function useBigUpload(options: UseBigUploadOptions): UseBigUploadReturn {
       baseUrl: options.baseUrl,
       chunkSize: options.chunkSize,
       concurrent: options.concurrent,
-      retryCount: options.retryCount,
-      retryDelay: options.retryDelay,
+      retryDelays: options.retryDelays,
       headers: options.headers,
       debug: options.debug,
     });
@@ -138,11 +137,18 @@ export function useBigUpload(options: UseBigUploadOptions): UseBigUploadReturn {
             return accept.toLowerCase() === `.${fileExtension}`;
           }
           if (accept.includes("/")) {
-            return mimeType.startsWith(accept.toLowerCase());
+            const acceptLower = accept.toLowerCase();
+            if (acceptLower.endsWith("/*")) {
+              // 处理通配符，如 "text/*"
+              const baseType = acceptLower.slice(0, -2); // 移除 "/*"
+              return mimeType.startsWith(baseType + "/");
+            } else {
+              // 精确匹配
+              return mimeType === acceptLower;
+            }
           }
           return false;
         });
-
         if (!isValidType) {
           return `不支持的文件类型: ${file.name}`;
         }
