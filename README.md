@@ -44,6 +44,14 @@ cd bigupload
 open test-all-backends.html
 ```
 
+### 单独部署
+
+选择你需要的后端，查看对应文档：
+
+- [Node.js 部署指南](docs/node-backend.md#部署说明)
+- [Python 部署指南](docs/python-backend.md#部署说明)  
+- [Java 部署指南](docs/java-backend.md#部署说明)
+  
 ### 服务地址
 
 - **Node.js 后端**: http://localhost:3000
@@ -187,13 +195,6 @@ docker-compose up -d
 curl http://localhost/api/upload/health
 ```
 
-### 单独部署
-
-选择你需要的后端，查看对应文档：
-
-- [Node.js 部署指南](docs/node-backend.md#部署说明)
-- [Python 部署指南](docs/python-backend.md#部署说明)  
-- [Java 部署指南](docs/java-backend.md#部署说明)
 
 ## 🧪 演示和测试
 

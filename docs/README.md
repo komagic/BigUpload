@@ -18,6 +18,12 @@ FastUploader 是一个高性能的大文件上传组件，支持分片上传、�
 bigupload/
 ├── packages/
 │   ├── frontend/           # React前端组件
+│   │   ├── src/
+│   │   │   ├── hooks/      # React Hooks
+│   │   │   ├── components/ # React 组件
+│   │   │   └── __tests__/  # 测试文件
+│   │   ├── jest.config.js  # Jest 配置
+│   │   └── tsconfig.test.json # 测试TypeScript配置
 │   ├── backend/
 │   │   ├── python/         # Python Flask后端
 │   │   ├── java/           # Java SpringBoot后端
@@ -43,6 +49,20 @@ npm install
 
 ```bash
 npm run build
+```
+
+### 运行测试
+
+```bash
+# 运行前端测试
+cd packages/frontend
+npm test
+
+# 运行测试并生成覆盖率报告
+npm run test:coverage
+
+# 监听模式运行测试
+npm run test:watch
 ```
 
 ### 启动演示应用
