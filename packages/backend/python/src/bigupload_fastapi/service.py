@@ -123,9 +123,9 @@ class UploadService:
             content = await chunk.read()
             await f.write(content)
         
-        # 验证分片哈希（如果提供）
+        # 验证分片哈希（如果提供）- 使用 SHA-256
         if chunk_hash:
-            actual_hash = hashlib.md5(content).hexdigest()
+            actual_hash = hashlib.sha256(content).hexdigest()
             if actual_hash != chunk_hash:
                 # 删除错误的分片文件
                 os.remove(chunk_file_path)
@@ -205,12 +205,12 @@ class UploadService:
                     await target_file.write(content)
     
     async def _calculate_file_hash(self, file_path: str) -> str:
-        """异步计算文件MD5哈希"""
-        hash_md5 = hashlib.md5()
+        """异步计算文件SHA-256哈希"""
+        hash_sha256 = hashlib.sha256()
         async with aiofiles.open(file_path, 'rb') as f:
             while chunk := await f.read(8192):
-                hash_md5.update(chunk)
-        return hash_md5.hexdigest()
+                hash_sha256.update(chunk)
+        return hash_sha256.hexdigest()
     
     async def _cleanup_temp_files(self, file_id: str):
         """清理临时文件"""

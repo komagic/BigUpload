@@ -121,10 +121,10 @@ def merge_chunks():
                 with open(chunk_path, 'rb') as chunk_file:
                     target_file.write(chunk_file.read())
         
-        # 验证合并后的文件哈希
+        # 验证合并后的文件哈希 - 使用 SHA-256
         with open(target_path, 'rb') as f:
             file_data = f.read()
-            merged_file_hash = hashlib.md5(file_data).hexdigest()
+            merged_file_hash = hashlib.sha256(file_data).hexdigest()
         
         # 哈希不匹配，删除合并的文件
         if merged_file_hash != file_hash:

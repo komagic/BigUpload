@@ -1,8 +1,7 @@
-// 测试不同文件类型的哈希计算
+// 测试不同文件类型的哈希计算 - 使用 SHA-256
 const fs = require("fs");
 const path = require("path");
 const crypto = require("crypto");
-const SparkMD5 = require("spark-md5");
 
 // 创建测试目录
 const TEST_DIR = path.resolve(__dirname, "test-files");
@@ -42,10 +41,10 @@ function createTestFiles() {
   fs.writeFileSync(testFiles.video, videoData);
 }
 
-// 使用Node.js的crypto计算文件哈希
+// 使用Node.js的crypto计算文件哈希 - SHA-256
 function calculateHashWithCrypto(filePath) {
   return new Promise((resolve, reject) => {
-    const hash = crypto.createHash("md5");
+    const hash = crypto.createHash("sha256");
     const stream = fs.createReadStream(filePath);
 
     stream.on("data", (data) => {
@@ -62,42 +61,39 @@ function calculateHashWithCrypto(filePath) {
   });
 }
 
-// 使用SparkMD5计算文件哈希 (类似前端实现)
-function calculateHashWithSparkMD5(filePath) {
+// 使用原生 crypto 计算文件哈希 (同步版本)
+function calculateHashWithNativeCrypto(filePath) {
   return new Promise((resolve, reject) => {
-    const fileBuffer = fs.readFileSync(filePath);
-    const spark = new SparkMD5.ArrayBuffer();
-
     try {
-      spark.append(fileBuffer);
-      const hash = spark.end();
-      resolve(hash);
+      const fileBuffer = fs.readFileSync(filePath);
+      const hash = crypto.createHash("sha256");
+      hash.update(fileBuffer);
+      resolve(hash.digest("hex"));
     } catch (err) {
       reject(err);
     }
   });
 }
 
-// 使用SparkMD5分块计算文件哈希 (模拟前端分块计算)
-function calculateHashWithSparkMD5Chunked(
+// 使用原生 crypto 分块计算文件哈希 (模拟前端分块计算)
+function calculateHashWithNativeCryptoChunked(
   filePath,
   chunkSize = 2 * 1024 * 1024
 ) {
   return new Promise((resolve, reject) => {
     try {
       const fileBuffer = fs.readFileSync(filePath);
-      const spark = new SparkMD5.ArrayBuffer();
+      const hash = crypto.createHash("sha256");
       const chunks = Math.ceil(fileBuffer.length / chunkSize);
 
       for (let i = 0; i < chunks; i++) {
         const start = i * chunkSize;
         const end = Math.min(start + chunkSize, fileBuffer.length);
         const chunk = fileBuffer.slice(start, end);
-        spark.append(chunk);
+        hash.update(chunk);
       }
 
-      const hash = spark.end();
-      resolve(hash);
+      resolve(hash.digest("hex"));
     } catch (err) {
       reject(err);
     }
@@ -119,19 +115,19 @@ async function runTests() {
 
     try {
       const cryptoHash = await calculateHashWithCrypto(filePath);
-      console.log(`Node.js crypto哈希: ${cryptoHash}`);
+      console.log(`Node.js crypto哈希 (流式): ${cryptoHash}`);
 
-      const sparkMD5Hash = await calculateHashWithSparkMD5(filePath);
-      console.log(`SparkMD5哈希 (一次性): ${sparkMD5Hash}`);
+      const nativeCryptoHash = await calculateHashWithNativeCrypto(filePath);
+      console.log(`Node.js crypto哈希 (一次性): ${nativeCryptoHash}`);
 
-      const sparkMD5ChunkedHash = await calculateHashWithSparkMD5Chunked(
-        filePath
-      );
-      console.log(`SparkMD5哈希 (分块): ${sparkMD5ChunkedHash}`);
+      const nativeCryptoChunkedHash =
+        await calculateHashWithNativeCryptoChunked(filePath);
+      console.log(`Node.js crypto哈希 (分块): ${nativeCryptoChunkedHash}`);
 
       // 验证哈希值是否一致
       const hashesMatch =
-        cryptoHash === sparkMD5Hash && sparkMD5Hash === sparkMD5ChunkedHash;
+        cryptoHash === nativeCryptoHash &&
+        nativeCryptoHash === nativeCryptoChunkedHash;
       console.log(`哈希值一致: ${hashesMatch ? "是" : "否"}`);
 
       if (!hashesMatch) {

@@ -109,8 +109,8 @@ def create_upload_router(
         - **fileName**: 文件名
         - **chunkIndex**: 分片索引（从0开始）
         - **chunkTotal**: 分片总数
-        - **fileHash**: 文件MD5哈希值
-        - **chunkHash**: 分片MD5哈希值（可选，用于验证）
+        - **fileHash**: 文件SHA-256哈希值
+        - **chunkHash**: 分片SHA-256哈希值（可选，用于验证）
         """
         try:
             logger.info(f"上传分片: fileId={fileId}, chunkIndex={chunkIndex}/{chunkTotal}")
@@ -149,7 +149,7 @@ def create_upload_router(
         
         - **fileId**: 文件唯一标识符
         - **fileName**: 文件名
-        - **fileHash**: 文件MD5哈希值
+        - **fileHash**: 文件SHA-256哈希值
         - **chunkTotal**: 分片总数
         - **fileSize**: 文件大小（可选）
         """

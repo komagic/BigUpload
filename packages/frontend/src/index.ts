@@ -57,6 +57,19 @@ export { BigAntUploader as AntUploader } from "./components/BigAntUploader";
 // Vue 3 组件 (需要在Vue项目中使用，这里只导出类型)
 // export { default as BigVueUploader } from "./components/BigVueUploader/index.vue";
 
+// Hash 计算工具
+export {
+  HashWorkerManager,
+  type HashProgress,
+  type ChunkResult,
+  type HashCalculationResult,
+} from "./utils/HashWorkerManager";
+
+export {
+  SimpleHashCalculator,
+  type SimpleHashResult,
+} from "./utils/SimpleHashCalculator";
+
 // 工具函数
 export const formatFileSize = (bytes: number): string => {
   if (bytes === 0) return "0 B";

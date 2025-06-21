@@ -1,0 +1,37 @@
+server:
+  port: 8080
+
+# BigUpload 配置
+bigupload:
+  upload-path: ./uploads
+  temp-path: ./uploads/temp
+  base-url: http://localhost:8080
+  max-file-size: 0  # 0表示不限制文件大小
+  chunk-size: 2097152  # 2MB
+  concurrent: 3
+  api-prefix: /api/upload
+  enable-file-server: true
+  file-server-path: /files
+
+# Spring 配置
+spring:
+  servlet:
+    multipart:
+      max-file-size: 50MB  # 单个分片最大50MB
+      max-request-size: 50MB
+      resolve-lazily: true
+  
+  # 开发时禁用缓存
+  devtools:
+    restart:
+      enabled: true
+    livereload:
+      enabled: true
+
+# 日志配置
+logging:
+  level:
+    com.bigupload: INFO
+    org.springframework.web.multipart: DEBUG
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level %logger{36} - %msg%n" 

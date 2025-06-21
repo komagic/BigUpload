@@ -4,7 +4,7 @@
  */
 
 import { v4 as uuidv4 } from "uuid";
-import SparkMD5 from "spark-md5";
+// 移除 SparkMD5 依赖，使用 Web Crypto API
 
 // 核心类型定义
 export interface UploadConfig {
@@ -113,16 +113,12 @@ export class BigUploadEngine {
   }
 
   private adjustConcurrencyForLargeFiles(): void {
-    // 对于大文件，降低并发数以减少服务器压力
-    if (this.config.concurrent > 2) {
-      this.config.concurrent = Math.max(
-        1,
-        Math.floor(this.config.concurrent / 2)
-      );
-      this.log("Adjusted concurrency for large files", {
-        concurrent: this.config.concurrent,
-      });
-    }
+    // 移除自动降低并发数的逻辑，保持用户配置的并发数
+    // 改为在运行时根据错误情况动态调整
+    this.log("Concurrency settings", {
+      concurrent: this.config.concurrent,
+      chunkSize: this.config.chunkSize,
+    });
   }
 
   /**
@@ -354,13 +350,13 @@ export class BigUploadEngine {
   // ========== 私有方法 ==========
 
   private async calculateFileHash(file: File): Promise<string> {
-    // 使用 SparkMD5 计算文件哈希，与后端保持一致
+    // 使用 Web Crypto API 计算文件哈希（SHA-256），与后端保持一致
     return new Promise((resolve, reject) => {
-      const spark = new SparkMD5.ArrayBuffer();
       const fileReader = new FileReader();
       const chunkSize = 2 * 1024 * 1024; // 2MB，与后端保持一致
       let currentChunk = 0;
       const chunks = Math.ceil(file.size / chunkSize);
+      const chunkHashes: string[] = []; // 存储每个分片的哈希值
 
       const loadNext = () => {
         const start = currentChunk * chunkSize;
@@ -369,15 +365,45 @@ export class BigUploadEngine {
         fileReader.readAsArrayBuffer(chunk);
       };
 
-      fileReader.onload = (e) => {
+      fileReader.onload = async (e) => {
         if (e.target?.result) {
-          spark.append(e.target.result as ArrayBuffer);
-          currentChunk++;
+          try {
+            // 计算当前分片的哈希值
+            const buffer = e.target.result as ArrayBuffer;
+            const chunkHashBuffer = await crypto.subtle.digest(
+              "SHA-256",
+              buffer
+            );
+            const chunkHashArray = Array.from(new Uint8Array(chunkHashBuffer));
+            const chunkHash = chunkHashArray
+              .map((b) => b.toString(16).padStart(2, "0"))
+              .join("");
 
-          if (currentChunk < chunks) {
-            loadNext();
-          } else {
-            resolve(spark.end());
+            chunkHashes.push(chunkHash);
+            currentChunk++;
+
+            if (currentChunk < chunks) {
+              loadNext();
+            } else {
+              // 计算最终哈希值
+              const combinedHashes = chunkHashes.join("");
+              const encoder = new TextEncoder();
+              const data = encoder.encode(combinedHashes);
+              const finalHashBuffer = await crypto.subtle.digest(
+                "SHA-256",
+                data
+              );
+              const finalHashArray = Array.from(
+                new Uint8Array(finalHashBuffer)
+              );
+              const finalHash = finalHashArray
+                .map((b) => b.toString(16).padStart(2, "0"))
+                .join("");
+
+              resolve(finalHash);
+            }
+          } catch (error) {
+            reject(error);
           }
         }
       };
@@ -561,47 +587,77 @@ export class BigUploadEngine {
     tasks: Array<() => Promise<void>>,
     concurrency: number
   ): Promise<void> {
-    const executing: Promise<void>[] = [];
-    const errors: any[] = [];
+    const executing: Array<{ promise: Promise<void>; index: number }> = [];
+    const errors: Array<{ error: any; index: number }> = [];
+    const completed: number[] = [];
+    let taskIndex = 0;
 
-    for (const task of tasks) {
-      const promise = task().catch((error) => {
-        errors.push(error);
-        throw error;
-      });
-      executing.push(promise);
+    this.log(
+      `Starting concurrent execution: ${tasks.length} tasks, concurrency: ${concurrency}`
+    );
 
-      if (executing.length >= concurrency) {
-        try {
-          await Promise.race(executing);
-        } catch (error) {
-          // 忽略单个任务的错误，继续执行其他任务
-        }
+    while (taskIndex < tasks.length || executing.length > 0) {
+      // 启动新任务直到达到并发限制
+      while (executing.length < concurrency && taskIndex < tasks.length) {
+        const currentIndex = taskIndex;
+        const task = tasks[taskIndex];
 
-        // 移除已完成的任务（无论成功还是失败）
-        const settled = await Promise.allSettled(executing);
-        for (let i = executing.length - 1; i >= 0; i--) {
-          if (
-            settled[i].status === "fulfilled" ||
-            settled[i].status === "rejected"
-          ) {
-            executing.splice(i, 1);
-          }
+        const promise = task()
+          .then(() => {
+            completed.push(currentIndex);
+            this.log(`Task ${currentIndex} completed successfully`);
+          })
+          .catch((error) => {
+            errors.push({ error, index: currentIndex });
+            this.log(`Task ${currentIndex} failed:`, error);
+            throw error;
+          });
+
+        executing.push({ promise, index: currentIndex });
+        taskIndex++;
+      }
+
+      if (executing.length === 0) break;
+
+      // 等待至少一个任务完成
+      try {
+        await Promise.race(executing.map((item) => item.promise));
+      } catch (error) {
+        // 单个任务失败不影响其他任务继续执行
+      }
+
+      // 移除已完成的任务
+      const settled = await Promise.allSettled(
+        executing.map((item) => item.promise)
+      );
+      for (let i = executing.length - 1; i >= 0; i--) {
+        if (
+          settled[i].status === "fulfilled" ||
+          settled[i].status === "rejected"
+        ) {
+          executing.splice(i, 1);
         }
       }
     }
 
-    // 等待所有剩余任务完成
-    try {
-      await Promise.all(executing);
-    } catch (error) {
-      // 忽略，错误已经在上面收集了
-    }
+    this.log(
+      `Concurrent execution completed. Success: ${completed.length}, Errors: ${errors.length}`
+    );
 
     // 如果有错误，抛出第一个错误
     if (errors.length > 0) {
-      this.log(`${errors.length} chunks failed to upload`);
-      throw errors[0];
+      const errorRate = errors.length / tasks.length;
+      this.log(`Upload error rate: ${(errorRate * 100).toFixed(1)}%`);
+
+      // 如果错误率太高，可能是网络问题，抛出错误
+      if (errorRate > 0.1) {
+        // 超过10%的分片失败
+        throw new Error(
+          `Too many chunks failed (${errors.length}/${tasks.length}). ${errors[0].error.message}`
+        );
+      } else {
+        throw errors[0].error;
+      }
     }
   }
 

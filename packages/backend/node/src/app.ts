@@ -4,7 +4,7 @@ import fs from "fs-extra";
 import path from "path";
 import multer from "multer";
 import crypto from "crypto";
-import SparkMD5 from "spark-md5";
+// 移除 SparkMD5 依赖，使用原生 crypto 模块
 import dotenv from "dotenv";
 
 // 加载配置
@@ -16,6 +16,41 @@ const port = process.env.PORT || 3000;
 // 中间件
 app.use(cors());
 app.use(express.json());
+
+// 设置请求超时
+app.use((req, res, next) => {
+  // 为上传请求设置更长的超时时间
+  if (req.path.includes('/upload-chunk') || req.path.includes('/merge-chunks')) {
+    req.setTimeout(5 * 60 * 1000); // 5分钟
+    res.setTimeout(5 * 60 * 1000);
+  } else {
+    req.setTimeout(30 * 1000); // 30秒
+    res.setTimeout(30 * 1000);
+  }
+  next();
+});
+
+// 简单的并发限制
+let activeUploads = 0;
+const MAX_CONCURRENT_UPLOADS = 10;
+
+const concurrencyLimiter = (req: any, res: any, next: any) => {
+  if (req.path.includes('/upload-chunk')) {
+    if (activeUploads >= MAX_CONCURRENT_UPLOADS) {
+      return res.status(429).json({
+        success: false,
+        message: '服务器繁忙，请稍后重试',
+      });
+    }
+    activeUploads++;
+    res.on('finish', () => {
+      activeUploads--;
+    });
+  }
+  next();
+};
+
+app.use(concurrencyLimiter);
 app.use(express.urlencoded({ extended: true }));
 
 // 上传目录
@@ -70,7 +105,17 @@ const storage = multer.diskStorage({
   },
 });
 
-const upload = multer({ storage });
+const upload = multer({
+  storage,
+  limits: {
+    fileSize: 50 * 1024 * 1024, // 50MB per chunk
+    files: 1,
+  },
+  fileFilter: (req, file, cb) => {
+    // 允许所有文件类型
+    cb(null, true);
+  },
+});
 
 // 路由
 app.get("/", (req, res) => {
@@ -201,10 +246,37 @@ app.post("/upload-chunk", upload.single("chunk"), async (req, res) => {
     );
 
     const targetPath = path.resolve(fileDir, chunkIndexStr);
+    console.log(`源文件路径: ${file.path}`);
     console.log(`目标路径: ${targetPath}`);
 
-    await fs.move(file.path, targetPath, { overwrite: true });
-    console.log(`文件已移动到: ${targetPath}`);
+    // 检查源文件是否存在
+    if (!(await fs.pathExists(file.path))) {
+      console.error(`源文件不存在: ${file.path}`);
+      return res.status(500).json({
+        success: false,
+        message: `源文件不存在: ${file.path}`,
+      });
+    }
+
+    try {
+      await fs.move(file.path, targetPath, { overwrite: true });
+      console.log(`文件已移动到: ${targetPath}`);
+    } catch (moveError) {
+      console.error(`文件移动失败:`, moveError);
+
+      // 尝试复制文件作为备用方案
+      try {
+        await fs.copy(file.path, targetPath, { overwrite: true });
+        await fs.remove(file.path);
+        console.log(`文件已复制到: ${targetPath}`);
+      } catch (copyError: any) {
+        console.error(`文件复制也失败:`, copyError);
+        return res.status(500).json({
+          success: false,
+          message: `文件处理失败: ${copyError.message || copyError}`,
+        });
+      }
+    }
 
     // 更新文件元数据
     if (!fileMetadata[fileId]) {
@@ -372,8 +444,8 @@ app.post("/merge-chunks", async (req, res) => {
     try {
       const mergedFileBuffer = await fs.readFile(targetPath);
 
-      // 使用SparkMD5计算哈希，保持与前端一致，确保计算方式匹配
-      const spark = new SparkMD5.ArrayBuffer();
+      // 使用 SHA-256 计算哈希，与前端保持一致
+      const hash = crypto.createHash("sha256");
 
       // 分块计算文件哈希，与前端保持一致
       const chunkSize = 2 * 1024 * 1024; // 2MB，与前端保持一致
@@ -389,10 +461,10 @@ app.post("/merge-chunks", async (req, res) => {
         const end = Math.min(start + chunkSize, mergedFileBuffer.length);
         const chunk = mergedFileBuffer.slice(start, end);
 
-        spark.append(chunk);
+        hash.update(chunk);
       }
 
-      const calculatedHash = spark.end();
+      const calculatedHash = hash.digest("hex");
 
       // 哈希不匹配，删除合并的文件
       if (calculatedHash !== fileHash) {

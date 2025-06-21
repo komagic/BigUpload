@@ -1,0 +1,66 @@
+/* BigUpload Demo React App Styles */
+
+.ant-layout-header {
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.ant-layout-content {
+  min-height: calc(100vh - 64px);
+  padding: 24px;
+}
+
+/* 性能对比页面样式 */
+.performance-comparison {
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+.test-card {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+.test-card .ant-card-body {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+.test-card .ant-typography {
+  margin-bottom: 16px;
+}
+
+.test-card .ant-btn {
+  margin-top: auto;
+}
+
+/* 数据展示相关 */
+.performance-highlight {
+  background: linear-gradient(135deg, #f6ffed 0%, #e6fffb 100%);
+  border: 1px solid #b7eb8f;
+  border-radius: 8px;
+  padding: 16px;
+  margin: 16px 0;
+}
+
+.performance-highlight .ant-typography {
+  margin: 0;
+  color: #52c41a;
+  font-weight: 600;
+}
+
+/* 响应式设计 */
+@media (max-width: 768px) {
+  .ant-layout-content {
+    padding: 16px;
+  }
+
+  .ant-card {
+    margin-bottom: 16px;
+  }
+
+  .ant-table-scroll {
+    overflow-x: auto;
+  }
+}

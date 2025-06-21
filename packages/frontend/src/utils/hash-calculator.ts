@@ -1,5 +1,5 @@
 import { FileHasher } from "@bigupload/shared";
-import SparkMD5 from "spark-md5";
+// 移除 SparkMD5 依赖，使用 Web Crypto API
 
 export class WebFileHasher implements FileHasher {
   /**
@@ -17,7 +17,7 @@ export class WebFileHasher implements FileHasher {
       if (file.size < 20 * 1024 * 1024) {
         return await this.calculateWholeFileHash(file);
       }
-      
+
       // 对于大文件使用分块计算方法
       return await this.calculateChunkedHash(file);
     } catch (err) {
@@ -31,39 +31,44 @@ export class WebFileHasher implements FileHasher {
   }
 
   /**
-   * 计算整个文件的哈希（适用于小文件）
+   * 计算整个文件的哈希（适用于小文件）- 使用 SHA-256
    */
-  private calculateWholeFileHash(file: File): Promise<string> {
+  private async calculateWholeFileHash(file: File): Promise<string> {
     return new Promise((resolve, reject) => {
       const reader = new FileReader();
-      
-      reader.onload = (e) => {
+
+      reader.onload = async (e) => {
         try {
           if (!e.target || !e.target.result) {
             throw new Error("读取文件结果为空");
           }
-          
+
           const buffer = e.target.result as ArrayBuffer;
-          const spark = new SparkMD5.ArrayBuffer();
-          spark.append(buffer);
-          const hash = spark.end();
+
+          // 使用 Web Crypto API 计算 SHA-256
+          const hashBuffer = await crypto.subtle.digest("SHA-256", buffer);
+          const hashArray = Array.from(new Uint8Array(hashBuffer));
+          const hash = hashArray
+            .map((b) => b.toString(16).padStart(2, "0"))
+            .join("");
+
           console.log(`小文件哈希计算完成: ${hash}`);
           resolve(hash);
         } catch (err) {
           reject(err);
         }
       };
-      
+
       reader.onerror = (e) => {
         reject(new Error("文件读取失败"));
       };
-      
+
       reader.readAsArrayBuffer(file);
     });
   }
 
   /**
-   * 分块计算文件哈希，适用于所有文件类型
+   * 分块计算文件哈希，适用于所有文件类型 - 使用 SHA-256
    */
   private calculateChunkedHash(file: File): Promise<string> {
     return new Promise((resolve, reject) => {
@@ -71,7 +76,7 @@ export class WebFileHasher implements FileHasher {
       const chunkSize = 2 * 1024 * 1024; // 2MB
       const chunks = Math.ceil(file.size / chunkSize);
       let currentChunk = 0;
-      const spark = new SparkMD5.ArrayBuffer();
+      const chunkHashes: string[] = []; // 存储每个分片的哈希值
       const fileReader = new FileReader();
 
       console.log(
@@ -79,12 +84,22 @@ export class WebFileHasher implements FileHasher {
       );
 
       // 处理下一个分块
-      const loadNext = () => {
+      const loadNext = async () => {
         try {
           // 如果已处理完所有分块，计算最终哈希值
           if (currentChunk >= chunks) {
             console.log("所有分块处理完成，计算最终哈希值");
-            const hash = spark.end();
+
+            // 将所有分片哈希值合并后计算最终哈希
+            const combinedHashes = chunkHashes.join("");
+            const encoder = new TextEncoder();
+            const data = encoder.encode(combinedHashes);
+            const hashBuffer = await crypto.subtle.digest("SHA-256", data);
+            const hashArray = Array.from(new Uint8Array(hashBuffer));
+            const hash = hashArray
+              .map((b) => b.toString(16).padStart(2, "0"))
+              .join("");
+
             resolve(hash);
             return;
           }
@@ -105,7 +120,7 @@ export class WebFileHasher implements FileHasher {
       };
 
       // 分块加载完成的处理函数
-      fileReader.onload = (e) => {
+      fileReader.onload = async (e) => {
         try {
           if (!e.target || !e.target.result) {
             throw new Error("读取分块结果为空");
@@ -113,8 +128,15 @@ export class WebFileHasher implements FileHasher {
 
           const buffer = e.target.result as ArrayBuffer;
 
-          // 将当前分块添加到哈希计算中
-          spark.append(buffer);
+          // 计算当前分片的哈希值
+          const chunkHashBuffer = await crypto.subtle.digest("SHA-256", buffer);
+          const chunkHashArray = Array.from(new Uint8Array(chunkHashBuffer));
+          const chunkHash = chunkHashArray
+            .map((b) => b.toString(16).padStart(2, "0"))
+            .join("");
+
+          // 将分片哈希值添加到数组中
+          chunkHashes.push(chunkHash);
 
           // 增加分块计数
           currentChunk++;
