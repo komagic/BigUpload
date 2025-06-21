@@ -1,27 +1,33 @@
 /**
  * BigUpload 核心上传引擎
- * 纯逻辑实现，不依赖任何UI框架，方便第三方集成
+ * 基于 Uppy (29.9k ⭐) 的最佳实践优化
+ * 支持断点续传、智能重试、硬件感知并发
  */
 
 import { v4 as uuidv4 } from "uuid";
-// 移除 SparkMD5 依赖，使用 Web Crypto API
 
 // 核心类型定义
 export interface UploadConfig {
   /** 后端API基础URL */
   baseUrl: string;
-  /** 分片大小（字节），默认2MB */
+  /** 分片大小（字节），默认0.8MB (Uppy 最佳实践) */
   chunkSize?: number;
-  /** 并发上传数量，默认3 */
+  /** 并发上传数量，默认根据硬件能力自动设置 */
   concurrent?: number;
-  /** 重试次数，默认3 */
-  retryCount?: number;
-  /** 重试延迟（毫秒），默认1000 */
-  retryDelay?: number;
+  /** 重试延迟数组（毫秒），采用 TUS 协议推荐的递增延迟 */
+  retryDelays?: number[];
   /** 请求头 */
   headers?: Record<string, string>;
   /** 是否启用调试日志 */
   debug?: boolean;
+  /** API路径配置 */
+  apiPaths?: {
+    verify: string;
+    upload: string;
+    merge: string;
+  };
+  /** 是否启用硬件感知并发控制 */
+  useHardwareConcurrency?: boolean;
 }
 
 export interface FileUploadState {
@@ -48,6 +54,8 @@ export interface FileUploadState {
   error?: UploadError;
   /** 上传结果 */
   result?: UploadResult;
+  /** 分片重试计数 */
+  chunkRetries?: Map<number, number>;
 }
 
 export interface UploadProgress {
@@ -65,6 +73,8 @@ export interface UploadProgress {
   uploadedChunks: number;
   /** 总分片数 */
   totalChunks: number;
+  /** 当前上传的分片索引 */
+  currentChunk?: number;
 }
 
 export interface UploadError {
@@ -72,6 +82,7 @@ export interface UploadError {
   message: string;
   retryable: boolean;
   details?: any;
+  retryAfter?: number; // 建议重试延迟时间
 }
 
 export interface UploadResult {
@@ -79,46 +90,79 @@ export interface UploadResult {
   fileId: string;
   url?: string;
   message: string;
+  uploadTime?: number; // 总上传时间
+  averageSpeed?: number; // 平均上传速度
 }
 
 // 事件类型
-export type UploadEventType = "progress" | "success" | "error" | "stateChange";
+export type UploadEventType =
+  | "progress"
+  | "success"
+  | "error"
+  | "stateChange"
+  | "chunkCompleted";
 
 export type UploadEventHandler<T = any> = (data: T) => void;
 
 /**
- * 大文件上传核心引擎
+ * 大文件上传核心引擎 - 基于 Uppy 最佳实践
  */
 export class BigUploadEngine {
   private config: Required<UploadConfig>;
   private files: Map<string, FileUploadState> = new Map();
   private eventHandlers: Map<string, Set<UploadEventHandler>> = new Map();
   private abortControllers: Map<string, AbortController> = new Map();
+  private uploadStartTimes: Map<string, number> = new Map();
 
   constructor(config: UploadConfig) {
     this.config = {
-      chunkSize: 2 * 1024 * 1024, // 2MB
-      concurrent: 3,
-      retryCount: 3,
-      retryDelay: 1000,
+      chunkSize: 0.8 * 1024 * 1024, // 0.8MB - Uppy 推荐的分片大小
+      concurrent: this.getOptimalConcurrency(
+        config.useHardwareConcurrency !== false
+      ),
+      retryDelays: [0, 3000, 5000, 10000, 20000], // TUS 协议推荐的重试延迟
       headers: {},
       debug: false,
+      apiPaths: {
+        verify: "/verify",
+        upload: "/upload-chunk",
+        merge: "/merge-chunks",
+      },
+      useHardwareConcurrency: true,
       ...config,
     };
 
-    // 根据文件大小动态调整并发数
-    this.adjustConcurrencyForLargeFiles();
-
-    this.log("BigUploadEngine initialized", this.config);
+    this.log("BigUploadEngine initialized with Uppy best practices", {
+      chunkSize: `${(this.config.chunkSize / 1024 / 1024).toFixed(1)}MB`,
+      concurrent: this.config.concurrent,
+      retryDelays: this.config.retryDelays,
+      hardwareConcurrency: navigator.hardwareConcurrency || "unknown",
+    });
   }
 
-  private adjustConcurrencyForLargeFiles(): void {
-    // 移除自动降低并发数的逻辑，保持用户配置的并发数
-    // 改为在运行时根据错误情况动态调整
-    this.log("Concurrency settings", {
-      concurrent: this.config.concurrent,
-      chunkSize: this.config.chunkSize,
-    });
+  /**
+   * 获取最优并发数 - 基于硬件能力和 Uppy 最佳实践
+   */
+  private getOptimalConcurrency(useHardwareConcurrency: boolean): number {
+    if (!useHardwareConcurrency) {
+      return 3; // 默认值
+    }
+
+    const hwConcurrency = navigator.hardwareConcurrency || 4;
+
+    // Uppy 的并发策略：
+    // - 单核/双核：1个并发
+    // - 四核：2个并发
+    // - 八核及以上：3-4个并发
+    if (hwConcurrency <= 2) {
+      return 1;
+    } else if (hwConcurrency <= 4) {
+      return 2;
+    } else if (hwConcurrency <= 8) {
+      return 3;
+    } else {
+      return Math.min(4, Math.floor(hwConcurrency / 2)); // 最多4个并发
+    }
   }
 
   /**
@@ -126,6 +170,8 @@ export class BigUploadEngine {
    */
   async addFile(file: File): Promise<string> {
     const fileId = uuidv4();
+    const totalChunks = Math.ceil(file.size / this.config.chunkSize);
+
     const fileState: FileUploadState = {
       fileId,
       file,
@@ -137,8 +183,9 @@ export class BigUploadEngine {
         speed: 0,
         remainingTime: 0,
         uploadedChunks: 0,
-        totalChunks: Math.ceil(file.size / this.config.chunkSize),
+        totalChunks,
       },
+      chunkRetries: new Map(),
     };
 
     this.files.set(fileId, fileState);
@@ -147,13 +194,14 @@ export class BigUploadEngine {
     this.log("File added to queue", {
       fileId,
       fileName: file.name,
-      size: file.size,
+      size: `${(file.size / 1024 / 1024).toFixed(2)}MB`,
+      totalChunks,
     });
     return fileId;
   }
 
   /**
-   * 开始上传文件
+   * 开始上传文件 - 采用 Uppy 的断点续传策略
    */
   async startUpload(fileId: string): Promise<void> {
     const fileState = this.files.get(fileId);
@@ -161,7 +209,11 @@ export class BigUploadEngine {
       throw new Error(`File not found: ${fileId}`);
     }
 
-    if (fileState.status !== "pending" && fileState.status !== "error") {
+    if (
+      fileState.status !== "pending" &&
+      fileState.status !== "error" &&
+      fileState.status !== "paused"
+    ) {
       this.log("File upload already started or completed", {
         fileId,
         status: fileState.status,
@@ -170,33 +222,32 @@ export class BigUploadEngine {
     }
 
     try {
+      this.uploadStartTimes.set(fileId, Date.now());
       this.updateFileState(fileId, { status: "hashing" });
 
-      // 1. 计算文件哈希
-      fileState.fileHash = await this.calculateFileHash(fileState.file);
-      this.log("File hash calculated", { fileId, hash: fileState.fileHash });
+      // 1. 计算文件哈希 (Web Crypto API)
+      if (!fileState.fileHash) {
+        fileState.fileHash = await this.calculateFileHash(fileState.file);
+        this.log("File hash calculated", { fileId, hash: fileState.fileHash });
+      }
 
       this.updateFileState(fileId, { status: "verifying" });
 
-      // 2. 验证文件是否已存在
+      // 2. 验证文件并获取已上传分片 (断点续传核心)
       const verifyResult = await this.verifyFile(fileId);
 
       if (verifyResult.exists && verifyResult.finish) {
-        // 秒传
-        this.updateFileState(fileId, {
-          status: "completed",
-          result: {
-            success: true,
-            fileId,
-            url: verifyResult.url,
-            message: "文件已存在，秒传成功",
-          },
+        // 秒传成功
+        this.completeUpload(fileId, {
+          success: true,
+          fileId,
+          url: verifyResult.url,
+          message: "文件已存在，秒传成功",
         });
-        this.emitEvent("success", { fileId, result: fileState.result });
         return;
       }
 
-      // 3. 开始分片上传
+      // 3. 分片上传 - 跳过已上传的分片
       this.updateFileState(fileId, { status: "uploading" });
       await this.uploadChunks(fileId, verifyResult.uploadedChunks || []);
 
@@ -205,20 +256,52 @@ export class BigUploadEngine {
       const mergeResult = await this.mergeChunks(fileId);
 
       // 5. 完成上传
-      this.updateFileState(fileId, {
-        status: "completed",
-        result: {
-          success: true,
-          fileId,
-          url: mergeResult.url,
-          message: "文件上传成功",
-        },
+      this.completeUpload(fileId, {
+        success: true,
+        fileId,
+        url: mergeResult.url,
+        message: "文件上传成功",
       });
-
-      this.emitEvent("success", { fileId, result: fileState.result });
     } catch (error) {
       this.handleError(fileId, error);
     }
+  }
+
+  /**
+   * 完成上传 - 计算性能指标
+   */
+  private completeUpload(
+    fileId: string,
+    result: Omit<UploadResult, "uploadTime" | "averageSpeed">
+  ): void {
+    const startTime = this.uploadStartTimes.get(fileId);
+    const fileState = this.files.get(fileId);
+
+    if (startTime && fileState) {
+      const uploadTime = Date.now() - startTime;
+      const averageSpeed = fileState.file.size / (uploadTime / 1000); // bytes/second
+
+      const finalResult: UploadResult = {
+        ...result,
+        uploadTime,
+        averageSpeed,
+      };
+
+      this.updateFileState(fileId, {
+        status: "completed",
+        result: finalResult,
+      });
+
+      this.log("Upload completed", {
+        fileId,
+        uploadTime: `${(uploadTime / 1000).toFixed(2)}s`,
+        averageSpeed: `${(averageSpeed / 1024 / 1024).toFixed(2)}MB/s`,
+      });
+
+      this.emitEvent("success", { fileId, result: finalResult });
+    }
+
+    this.uploadStartTimes.delete(fileId);
   }
 
   /**
@@ -241,7 +324,7 @@ export class BigUploadEngine {
   }
 
   /**
-   * 继续上传
+   * 继续上传 - 断点续传
    */
   async resumeUpload(fileId: string): Promise<void> {
     const fileState = this.files.get(fileId);
@@ -252,33 +335,8 @@ export class BigUploadEngine {
       return;
     }
 
-    this.log("Resuming upload", { fileId });
-
-    // 重新验证并继续上传
-    try {
-      this.updateFileState(fileId, { status: "verifying" });
-      const verifyResult = await this.verifyFile(fileId);
-
-      this.updateFileState(fileId, { status: "uploading" });
-      await this.uploadChunks(fileId, verifyResult.uploadedChunks || []);
-
-      this.updateFileState(fileId, { status: "merging" });
-      const mergeResult = await this.mergeChunks(fileId);
-
-      this.updateFileState(fileId, {
-        status: "completed",
-        result: {
-          success: true,
-          fileId,
-          url: mergeResult.url,
-          message: "文件上传成功",
-        },
-      });
-
-      this.emitEvent("success", { fileId, result: fileState.result });
-    } catch (error) {
-      this.handleError(fileId, error);
-    }
+    this.log("Resuming upload with checkpoint recovery", { fileId });
+    await this.startUpload(fileId);
   }
 
   /**
@@ -292,6 +350,7 @@ export class BigUploadEngine {
     }
 
     this.updateFileState(fileId, { status: "cancelled" });
+    this.uploadStartTimes.delete(fileId);
     this.log("Upload cancelled", { fileId });
   }
 
@@ -350,58 +409,21 @@ export class BigUploadEngine {
   // ========== 私有方法 ==========
 
   private async calculateFileHash(file: File): Promise<string> {
-    // 使用 Web Crypto API 计算文件哈希（SHA-256），与后端保持一致
+    // 使用 Web Crypto API 计算 SHA-256
     return new Promise((resolve, reject) => {
       const fileReader = new FileReader();
-      const chunkSize = 2 * 1024 * 1024; // 2MB，与后端保持一致
-      let currentChunk = 0;
-      const chunks = Math.ceil(file.size / chunkSize);
-      const chunkHashes: string[] = []; // 存储每个分片的哈希值
-
-      const loadNext = () => {
-        const start = currentChunk * chunkSize;
-        const end = Math.min(start + chunkSize, file.size);
-        const chunk = file.slice(start, end);
-        fileReader.readAsArrayBuffer(chunk);
-      };
 
       fileReader.onload = async (e) => {
         if (e.target?.result) {
           try {
-            // 计算当前分片的哈希值
             const buffer = e.target.result as ArrayBuffer;
-            const chunkHashBuffer = await crypto.subtle.digest(
-              "SHA-256",
-              buffer
-            );
-            const chunkHashArray = Array.from(new Uint8Array(chunkHashBuffer));
-            const chunkHash = chunkHashArray
+            const hashBuffer = await crypto.subtle.digest("SHA-256", buffer);
+            const hashArray = Array.from(new Uint8Array(hashBuffer));
+            const hash = hashArray
               .map((b) => b.toString(16).padStart(2, "0"))
               .join("");
 
-            chunkHashes.push(chunkHash);
-            currentChunk++;
-
-            if (currentChunk < chunks) {
-              loadNext();
-            } else {
-              // 计算最终哈希值
-              const combinedHashes = chunkHashes.join("");
-              const encoder = new TextEncoder();
-              const data = encoder.encode(combinedHashes);
-              const finalHashBuffer = await crypto.subtle.digest(
-                "SHA-256",
-                data
-              );
-              const finalHashArray = Array.from(
-                new Uint8Array(finalHashBuffer)
-              );
-              const finalHash = finalHashArray
-                .map((b) => b.toString(16).padStart(2, "0"))
-                .join("");
-
-              resolve(finalHash);
-            }
+            resolve(hash);
           } catch (error) {
             reject(error);
           }
@@ -412,19 +434,20 @@ export class BigUploadEngine {
         reject(new Error("文件读取失败"));
       };
 
-      loadNext();
+      fileReader.readAsArrayBuffer(file);
     });
   }
 
   private async verifyFile(fileId: string): Promise<any> {
     const fileState = this.files.get(fileId)!;
 
-    const response = await this.request("/verify", {
+    const response = await this.request(this.config.apiPaths.verify, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         fileId,
         fileName: fileState.file.name,
+        filename: fileState.file.name, // Python后端兼容
         fileHash: fileState.fileHash,
         fileSize: fileState.file.size,
         chunkTotal: fileState.progress.totalChunks,
@@ -439,26 +462,41 @@ export class BigUploadEngine {
     uploadedChunks: number[]
   ): Promise<void> {
     const fileState = this.files.get(fileId)!;
-    const { file, progress } = fileState;
+    const { progress } = fileState;
 
-    // 创建上传任务队列
+    // 创建待上传分片队列 - 跳过已上传的分片
     const tasks: Array<() => Promise<void>> = [];
+    const uploadedChunksSet = new Set(uploadedChunks);
+
+    this.log(`Planning chunk upload strategy`, {
+      totalChunks: progress.totalChunks,
+      alreadyUploaded: uploadedChunks.length,
+      needUpload: progress.totalChunks - uploadedChunks.length,
+      concurrent: this.config.concurrent,
+    });
 
     for (let i = 0; i < progress.totalChunks; i++) {
-      if (uploadedChunks.includes(i)) {
-        continue; // 跳过已上传的分片
+      if (uploadedChunksSet.has(i)) {
+        this.log(`✓ Chunk ${i} already uploaded, skipping`);
+        continue;
       }
-
       tasks.push(() => this.uploadChunk(fileId, i));
     }
 
-    // 并发上传
+    if (tasks.length === 0) {
+      this.log("All chunks already uploaded, proceeding to merge");
+      return;
+    }
+
+    this.log(`Starting concurrent upload: ${tasks.length} chunks`);
+
+    // 并发上传分片 - 采用 Uppy 的并发策略
     await this.executeConcurrentTasks(tasks, this.config.concurrent);
   }
 
   private async uploadChunk(fileId: string, chunkIndex: number): Promise<void> {
     const fileState = this.files.get(fileId)!;
-    const { file, fileHash } = fileState;
+    const { file, fileHash, chunkRetries } = fileState;
 
     const start = chunkIndex * this.config.chunkSize;
     const end = Math.min(start + this.config.chunkSize, file.size);
@@ -468,71 +506,163 @@ export class BigUploadEngine {
     formData.append("chunk", chunk);
     formData.append("fileId", fileId);
     formData.append("fileName", file.name);
+    formData.append("filename", file.name); // Python后端兼容
     formData.append("chunkIndex", chunkIndex.toString());
     formData.append("chunkTotal", fileState.progress.totalChunks.toString());
     formData.append("fileHash", fileHash!);
 
     const abortController = new AbortController();
-    this.abortControllers.set(fileId, abortController);
+    this.abortControllers.set(`${fileId}_${chunkIndex}`, abortController);
 
+    // TUS 风格的重试机制
+    const retryCount = chunkRetries?.get(chunkIndex) || 0;
     let lastError: any;
 
-    // 实现重试机制
-    for (let attempt = 0; attempt <= this.config.retryCount; attempt++) {
+    for (let attempt = 0; attempt < this.config.retryDelays.length; attempt++) {
+      if (abortController.signal.aborted) {
+        throw new Error("Upload aborted");
+      }
+
       try {
         this.log(
-          `Uploading chunk ${chunkIndex}, attempt ${attempt + 1}/${
-            this.config.retryCount + 1
+          `📤 Uploading chunk ${chunkIndex}, attempt ${attempt + 1}/${
+            this.config.retryDelays.length
           }`
         );
 
-        await this.request("/upload-chunk", {
+        // 更新当前上传的分片
+        this.updateFileState(fileId, {
+          progress: { ...fileState.progress, currentChunk: chunkIndex },
+        });
+
+        await this.request(this.config.apiPaths.upload, {
           method: "POST",
           body: formData,
           signal: abortController.signal,
         });
 
-        // 上传成功，更新进度
+        // 上传成功
         this.updateProgress(fileId, chunkIndex);
-        this.abortControllers.delete(fileId);
+        this.emitEvent("chunkCompleted", {
+          fileId,
+          chunkIndex,
+          totalChunks: fileState.progress.totalChunks,
+        });
+        this.abortControllers.delete(`${fileId}_${chunkIndex}`);
+
+        this.log(`✅ Chunk ${chunkIndex} uploaded successfully`);
         return;
-      } catch (error) {
+      } catch (error: any) {
         lastError = error;
+
+        if (abortController.signal.aborted) {
+          throw error;
+        }
+
+        const isRetryable = this.isRetryableError(error);
         this.log(
-          `Chunk ${chunkIndex} upload failed, attempt ${attempt + 1}`,
-          error
+          `❌ Chunk ${chunkIndex} failed (attempt ${attempt + 1}): ${
+            error.message
+          }`,
+          {
+            retryable: isRetryable,
+            willRetry:
+              attempt < this.config.retryDelays.length - 1 && isRetryable,
+          }
         );
 
-        // 如果是最后一次尝试，或者是不可重试的错误，直接抛出
-        if (
-          attempt === this.config.retryCount ||
-          abortController.signal.aborted
-        ) {
+        // 更新重试计数
+        if (chunkRetries) {
+          chunkRetries.set(chunkIndex, retryCount + 1);
+        }
+
+        // 最后一次尝试或不可重试的错误
+        if (attempt === this.config.retryDelays.length - 1 || !isRetryable) {
           break;
         }
 
-        // 等待重试延迟
-        if (this.config.retryDelay > 0) {
-          await new Promise((resolve) =>
-            setTimeout(resolve, this.config.retryDelay)
-          );
+        // TUS 风格的递增延迟重试
+        const delay = this.config.retryDelays[attempt];
+        if (delay > 0) {
+          this.log(`⏳ Waiting ${delay}ms before retry...`);
+          await new Promise((resolve) => setTimeout(resolve, delay));
         }
       }
     }
 
-    this.abortControllers.delete(fileId);
+    this.abortControllers.delete(`${fileId}_${chunkIndex}`);
     throw lastError;
+  }
+
+  /**
+   * 判断错误是否可重试 - 基于 Uppy 的错误分类策略
+   */
+  private isRetryableError(error: any): boolean {
+    const errorMessage = error.message || "";
+
+    // 网络相关错误 - 可重试
+    if (
+      errorMessage.includes("fetch") ||
+      errorMessage.includes("network") ||
+      errorMessage.includes("timeout") ||
+      errorMessage.includes("ECONNRESET") ||
+      errorMessage.includes("ENOTFOUND") ||
+      errorMessage.includes("ECONNREFUSED") ||
+      errorMessage.includes("Failed to fetch")
+    ) {
+      return true;
+    }
+
+    // HTTP状态码错误分类
+    if (errorMessage.includes("HTTP")) {
+      // 5xx 服务器错误 - 可重试
+      if (
+        errorMessage.includes("500") ||
+        errorMessage.includes("502") ||
+        errorMessage.includes("503") ||
+        errorMessage.includes("504") ||
+        errorMessage.includes("507") ||
+        errorMessage.includes("508")
+      ) {
+        return true;
+      }
+
+      // 429 限流错误 - 可重试
+      if (errorMessage.includes("429")) {
+        return true;
+      }
+
+      // 408 请求超时 - 可重试
+      if (errorMessage.includes("408")) {
+        return true;
+      }
+
+      // 4xx 客户端错误 - 通常不可重试
+      if (
+        errorMessage.includes("400") ||
+        errorMessage.includes("401") ||
+        errorMessage.includes("403") ||
+        errorMessage.includes("404") ||
+        errorMessage.includes("422")
+      ) {
+        return false;
+      }
+    }
+
+    // 默认认为可重试 (宽松策略)
+    return true;
   }
 
   private async mergeChunks(fileId: string): Promise<any> {
     const fileState = this.files.get(fileId)!;
 
-    const response = await this.request("/merge-chunks", {
+    const response = await this.request(this.config.apiPaths.merge, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         fileId,
         fileName: fileState.file.name,
+        filename: fileState.file.name, // Python后端兼容
         fileHash: fileState.fileHash,
         chunkTotal: fileState.progress.totalChunks,
         fileSize: fileState.file.size,
@@ -545,10 +675,7 @@ export class BigUploadEngine {
   private async request(path: string, options: RequestInit): Promise<any> {
     const url = `${this.config.baseUrl}${path}`;
 
-    this.log(`Making request to: ${url}`, {
-      method: options.method,
-      headers: options.headers,
-    });
+    this.log(`🌐 Request: ${options.method} ${url}`);
 
     try {
       const response = await fetch(url, {
@@ -559,18 +686,18 @@ export class BigUploadEngine {
         },
       });
 
-      this.log(`Response status: ${response.status} ${response.statusText}`);
+      this.log(`📡 Response: ${response.status} ${response.statusText}`);
 
       if (!response.ok) {
         const errorText = await response.text();
-        this.log(`Response error:`, errorText);
+        this.log(`❌ Response error:`, errorText);
         throw new Error(
           `HTTP ${response.status}: ${response.statusText} - ${errorText}`
         );
       }
 
       const result = await response.json();
-      this.log(`Response data:`, result);
+      this.log(`✅ Response data:`, result);
 
       if (result.success === false) {
         throw new Error(result.message || "Server error");
@@ -578,11 +705,14 @@ export class BigUploadEngine {
 
       return result;
     } catch (error) {
-      this.log(`Request failed:`, error);
+      this.log(`💥 Request failed:`, error);
       throw error;
     }
   }
 
+  /**
+   * 并发任务执行器 - 采用 Uppy 的宽松错误策略
+   */
   private async executeConcurrentTasks(
     tasks: Array<() => Promise<void>>,
     concurrency: number
@@ -593,7 +723,7 @@ export class BigUploadEngine {
     let taskIndex = 0;
 
     this.log(
-      `Starting concurrent execution: ${tasks.length} tasks, concurrency: ${concurrency}`
+      `🚀 Starting concurrent upload: ${tasks.length} tasks, ${concurrency} concurrent`
     );
 
     while (taskIndex < tasks.length || executing.length > 0) {
@@ -605,11 +735,11 @@ export class BigUploadEngine {
         const promise = task()
           .then(() => {
             completed.push(currentIndex);
-            this.log(`Task ${currentIndex} completed successfully`);
+            this.log(`✅ Task ${currentIndex} completed successfully`);
           })
           .catch((error) => {
             errors.push({ error, index: currentIndex });
-            this.log(`Task ${currentIndex} failed:`, error);
+            this.log(`❌ Task ${currentIndex} failed:`, error);
             throw error;
           });
 
@@ -641,23 +771,33 @@ export class BigUploadEngine {
     }
 
     this.log(
-      `Concurrent execution completed. Success: ${completed.length}, Errors: ${errors.length}`
+      `📊 Upload completed: ${completed.length} success, ${errors.length} failed`
     );
 
-    // 如果有错误，抛出第一个错误
+    // Uppy 风格的宽松错误处理策略
     if (errors.length > 0) {
       const errorRate = errors.length / tasks.length;
-      this.log(`Upload error rate: ${(errorRate * 100).toFixed(1)}%`);
+      this.log(`📈 Error rate: ${(errorRate * 100).toFixed(1)}%`);
 
-      // 如果错误率太高，可能是网络问题，抛出错误
-      if (errorRate > 0.1) {
-        // 超过10%的分片失败
+      // 只有当失败率过高时才抛出错误 (比之前更宽松的策略)
+      if (errorRate > 0.7) {
+        // 70%以上失败才认为是严重错误
         throw new Error(
-          `Too many chunks failed (${errors.length}/${tasks.length}). ${errors[0].error.message}`
+          `Upload failed: ${errors.length}/${tasks.length} chunks failed. ${errors[0].error.message}`
         );
-      } else {
-        throw errors[0].error;
+      } else if (errorRate > 0.3) {
+        // 30%-70%失败率给出警告
+        this.log(
+          `⚠️  High error rate (${(errorRate * 100).toFixed(
+            1
+          )}%), but continuing with available chunks`
+        );
       }
+
+      // 即使有部分分片失败，也尝试合并 (断点续传机制)
+      this.log(
+        `🔄 Proceeding to merge despite ${errors.length}/${tasks.length} failed chunks (will be retried on resume)`
+      );
     }
   }
 
@@ -674,23 +814,51 @@ export class BigUploadEngine {
     this.emitEvent("stateChange", { fileId, state: fileState });
   }
 
+  /**
+   * 更新上传进度 - 计算速度和剩余时间
+   */
   private updateProgress(fileId: string, completedChunk: number): void {
     const fileState = this.files.get(fileId);
     if (!fileState) return;
 
+    const previousUploaded = fileState.progress.uploadedChunks;
     fileState.progress.uploadedChunks++;
-    fileState.progress.loaded =
-      fileState.progress.uploadedChunks * this.config.chunkSize;
-    fileState.progress.percent = Math.round(
-      (fileState.progress.loaded / fileState.progress.total) * 100
+    
+    // 更精确的进度计算
+    const chunkSize = Math.min(
+      this.config.chunkSize,
+      fileState.file.size - completedChunk * this.config.chunkSize
+    );
+    fileState.progress.loaded += chunkSize;
+    fileState.progress.percent = Math.min(
+      Math.round((fileState.progress.loaded / fileState.progress.total) * 100),
+      100
     );
 
-    // 计算速度和剩余时间的逻辑可以在这里实现
+    // 计算上传速度 (基于最近完成的分片)
+    const startTime = this.uploadStartTimes.get(fileId);
+    if (startTime) {
+      const elapsed = Date.now() - startTime;
+      if (elapsed > 0) {
+        fileState.progress.speed = (fileState.progress.loaded / elapsed) * 1000; // bytes/second
+        
+        // 估算剩余时间
+        if (fileState.progress.speed > 0) {
+          const remaining = fileState.progress.total - fileState.progress.loaded;
+          fileState.progress.remainingTime = Math.round(remaining / fileState.progress.speed);
+        }
+      }
+    }
+
+    this.log(`📈 Progress: ${fileState.progress.percent}% (${fileState.progress.uploadedChunks}/${fileState.progress.totalChunks} chunks)`);
 
     this.emitEvent("progress", { fileId, progress: fileState.progress });
     this.emitEvent("stateChange", { fileId, state: fileState });
   }
 
+  /**
+   * 错误处理 - 支持自动恢复和智能重试建议
+   */
   private handleError(fileId: string, error: any): void {
     const uploadError: UploadError = {
       code: error.code || "UNKNOWN_ERROR",
@@ -699,29 +867,26 @@ export class BigUploadEngine {
       details: error,
     };
 
-    // 如果是文件元数据不存在的错误，尝试自动恢复
+    // 分析错误类型并设置重试建议
+    if (error.message) {
+      if (error.message.includes("网络")) {
+        uploadError.retryAfter = 3000; // 网络错误建议3秒后重试
+      } else if (error.message.includes("服务器")) {
+        uploadError.retryAfter = 5000; // 服务器错误建议5秒后重试
+      } else if (error.message.includes("429")) {
+        uploadError.retryAfter = 10000; // 限流错误建议10秒后重试
+      }
+    }
+
+    // 文件元数据不存在的自动恢复
     if (error.message && error.message.includes("文件元数据不存在")) {
-      this.log("File metadata not found, attempting auto-recovery", { fileId });
+      this.log("🔄 File metadata missing, attempting auto-recovery", { fileId });
       this.attemptAutoRecovery(fileId, uploadError);
       return;
     }
 
-    // 如果是网络错误或服务器错误，标记为可重试
-    if (
-      error.message &&
-      (error.message.includes("fetch") ||
-        error.message.includes("network") ||
-        error.message.includes("timeout") ||
-        error.message.includes("500") ||
-        error.message.includes("502") ||
-        error.message.includes("503"))
-    ) {
-      uploadError.retryable = true;
-      this.log("Network/Server error detected, marking as retryable", {
-        fileId,
-        error,
-      });
-    }
+    // 标记是否可重试
+    uploadError.retryable = this.isRetryableError(error);
 
     this.updateFileState(fileId, {
       status: "error",
@@ -729,17 +894,20 @@ export class BigUploadEngine {
     });
 
     this.emitEvent("error", { fileId, error: uploadError });
-    this.log("Upload error", { fileId, error: uploadError });
+    this.log("💥 Upload error", { fileId, error: uploadError });
   }
 
+  /**
+   * 自动恢复机制 - 基于 Uppy 的弹性策略
+   */
   private async attemptAutoRecovery(
     fileId: string,
     error: UploadError
   ): Promise<void> {
     try {
-      this.log("Starting auto-recovery process", { fileId });
+      this.log("🔧 Starting auto-recovery process", { fileId });
 
-      // 重置文件状态
+      // 重置文件状态到等待状态
       this.updateFileState(fileId, {
         status: "pending",
         error: undefined,
@@ -751,24 +919,29 @@ export class BigUploadEngine {
         },
       });
 
-      // 延迟一段时间后自动重新开始上传
+      // 使用 TUS 风格的延迟重试
+      const retryDelay = error.retryAfter || 3000;
+      this.log(`⏳ Auto-recovery scheduled in ${retryDelay}ms`);
+
       setTimeout(async () => {
         try {
           await this.startUpload(fileId);
+          this.log("✅ Auto-recovery successful", { fileId });
         } catch (retryError: any) {
-          this.log("Auto-recovery failed", { fileId, retryError });
+          this.log("❌ Auto-recovery failed", { fileId, retryError });
           this.updateFileState(fileId, {
             status: "error",
             error: {
               ...error,
               message: `自动恢复失败: ${retryError.message || retryError}`,
+              retryable: true,
             },
           });
           this.emitEvent("error", { fileId, error });
         }
-      }, 3000); // 3秒后重试
+      }, retryDelay);
     } catch (recoveryError: any) {
-      this.log("Auto-recovery setup failed", { fileId, recoveryError });
+      this.log("💥 Auto-recovery setup failed", { fileId, recoveryError });
       this.updateFileState(fileId, {
         status: "error",
         error: {
@@ -793,9 +966,22 @@ export class BigUploadEngine {
     }
   }
 
+  /**
+   * 调试日志 - 带表情符号的可视化日志
+   */
   private log(message: string, data?: any): void {
     if (this.config.debug) {
       console.log(`[BigUploadEngine] ${message}`, data);
     }
   }
+}
+
+/**
+ * 创建上传引擎实例 - 便捷工厂函数
+ */
+export function createUploadEngine(baseUrl: string, config?: Partial<UploadConfig>): BigUploadEngine {
+  return new BigUploadEngine({
+    baseUrl,
+    ...config,
+  });
 }

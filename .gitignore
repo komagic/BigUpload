@@ -46,7 +46,7 @@ yarn-error.log*
 
 # 上传文件
 packages/backend/*/uploads/
-
+uploads/
 # Java编译文件
 target/
 *.class
@@ -57,7 +57,7 @@ target/
 *.tar.gz
 *.rar
 hs_err_pid*
-
+.cursor
 # Python缓存
 __pycache__/
 *.py[cod]

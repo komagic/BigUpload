@@ -64,17 +64,19 @@ cd ../../..
 # 启动Java后端 (端口: 8080)
 echo ""
 echo "☕ 启动 Java Spring Boot 后端服务 (端口: 8080)..."
-cd apps/demo-java
-mvn compile >../../logs/java-compile.log 2>&1
+cd packages/backend/java
+# 确保上传目录存在
+mkdir -p uploads/temp
+mvn compile >../../../logs/java-compile.log 2>&1
 if [ $? -eq 0 ]; then
     echo "✅ Java 项目编译成功"
-    mvn spring-boot:run >../../logs/java-server.log 2>&1 &
+    mvn spring-boot:run >../../../logs/java-server.log 2>&1 &
     JAVA_PID=$!
     echo "✅ Java 服务已启动 (PID: $JAVA_PID)"
 else
     echo "❌ Java 项目编译失败，请查看 logs/java-compile.log"
 fi
-cd ../..
+cd ../../..
 
 # 保存PID到文件
 echo $NODE_PID >logs/node.pid

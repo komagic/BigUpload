@@ -1,5 +1,5 @@
 {
-    "name": "@bigupload/react",
+    "name": "@bigupload/frontend",
     "version": "1.0.0",
     "main": "dist/index.js",
     "types": "dist/index.d.ts",
@@ -8,7 +8,11 @@
     ],
     "scripts": {
         "build": "tsc",
-        "dev": "tsc --watch"
+        "dev": "tsc --watch",
+        "clean": "rm -rf dist",
+        "prepare": "npm run clean && npm run build",
+        "publish:npm": "npm publish --access public",
+        "publish:dry": "npm publish --dry-run"
     },
     "dependencies": {
         "@bigupload/shared": "1.0.0",

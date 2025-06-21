@@ -1,7 +1,8 @@
 import React from "react";
 import { Layout, Typography } from "antd";
-import { PerformanceComparison } from "./components/PerformanceComparison";
+import { MultiServerUploadTest } from "./components/MultiServerUploadTest";
 import "./App.css";
+
 
 const { Content, Header } = Layout;
 const { Title } = Typography;
@@ -19,12 +20,12 @@ function App() {
         }}
       >
         <Title level={3} style={{ margin: 0, color: "#1890ff" }}>
-          🚀 BigUpload Performance Demo
+          🚀 BigUpload 三服务器上传测试
         </Title>
       </Header>
       <Layout>
         <Content style={{ background: "#f0f2f5" }}>
-          <PerformanceComparison />
+          <MultiServerUploadTest />
         </Content>
       </Layout>
     </Layout>

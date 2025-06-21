@@ -23,4 +23,9 @@ public class MergeResponse {
      * 响应消息
      */
     private String message;
+    
+    /**
+     * 警告信息（可选）
+     */
+    private String warning;
 } 

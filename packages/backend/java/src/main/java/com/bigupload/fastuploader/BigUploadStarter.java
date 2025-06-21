@@ -1,4 +1,4 @@
-3package com.bigupload.fastuploader;
+package com.bigupload.fastuploader;
 
 /**
  * BigUpload Spring Boot Starter 主标识类

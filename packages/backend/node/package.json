@@ -7,7 +7,11 @@
     "scripts": {
         "build": "tsc",
         "dev": "ts-node-dev --respawn --transpile-only src/app.ts",
-        "start": "node dist/app.js"
+        "start": "node dist/app.js",
+        "clean": "rm -rf dist",
+        "prepare": "npm run clean && npm run build",
+        "publish:npm": "npm publish --access public",
+        "publish:dry": "npm publish --dry-run"
     },
     "dependencies": {
         "@bigupload/shared": "1.0.0",

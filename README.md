@@ -1,337 +1,698 @@
-# BigUpload - 企业级大文件上传解决方案
+# BigUpload - 大文件上传解决方案
 
-[![Build Status](https://img.shields.io/badge/build-passing-brightgreen.svg)]()
-[![License](https://img.shields.io/badge/license-MIT-blue.svg)]()
-[![Version](https://img.shields.io/badge/version-1.0.0-orange.svg)]()
+<div align="center">
 
-企业级大文件上传解决方案，支持分片上传、断点续传、秒传等核心功能。采用前后端分离架构，提供多种技术栈的完整实现。
+![BigUpload Logo](https://img.shields.io/badge/BigUpload-v1.0.0-blue.svg)
+![License](https://img.shields.io/badge/license-MIT-green.svg)
+![Node.js](https://img.shields.io/badge/Node.js-18+-green.svg)
+![Python](https://img.shields.io/badge/Python-3.8+-blue.svg)
+![Java](https://img.shields.io/badge/Java-11+-orange.svg)
 
-## 🌟 核心特性
+**支持分片上传、断点续传、秒传的多语言实现方案**
 
-### 📁 全面文件格式支持
-- **图片格式**: JPG, PNG, GIF, WebP, TIFF, SVG, BMP, AVIF, HEIC, PSD, AI, EPS等
-- **视频格式**: MP4, AVI, MOV, MKV, WebM, FLV, WMV, ProRes, DNxHD, R3D等专业格式
-- **音频格式**: MP3, WAV, FLAC, AAC, OGG, WMA, APE, DSD等无损格式
-- **文档格式**: DOC, PDF, TXT, PPT, XLS, 各种代码文件, 电子书格式
-- **压缩格式**: ZIP, RAR, 7Z, TAR, DMG, ISO等
-- **专业格式**: CAD文件, 3D模型, 数据库文件, 字体文件等
+</div>
 
-### 🚀 上传功能
-- **分片上传**: 可配置分片大小，支持大文件上传
-- **断点续传**: 支持暂停、继续、重试机制
-- **秒传功能**: 基于SHA-256文件哈希的秒传
-- **并发控制**: 可配置并发上传数量
-- **进度监控**: 实时进度反馈和速度显示
-- **错误处理**: 完善的错误处理和重试机制
+## 📋 目录
 
-### 🎨 UI组件
-- **多种UI风格**: 基础组件、Ant Design组件、Vue组件
-- **响应式设计**: 适配不同屏幕尺寸
-- **拖拽上传**: 支持文件拖拽到指定区域上传
-- **主题定制**: 可自定义样式主题
+- [项目概述](#项目概述)
+- [核心特性](#核心特性)
+- [技术架构](#技术架构)
+- [快速开始](#快速开始)
+- [后端使用](#后端使用)
+- [前端使用](#前端使用)
+- [API 文档](#api文档)
+- [配置说明](#配置说明)
+- [部署指南](#部署指南)
+- [故障排除](#故障排除)
 
-### 🔧 技术架构
-- **核心引擎**: 纯TypeScript实现，框架无关
-- **前端支持**: React 18, Vue 3, 原生JavaScript
-- **后端支持**: Node.js, Java, Python
-- **类型安全**: 完整的TypeScript类型支持
+## 🎯 项目概述
 
-## 📦 项目结构
+BigUpload 是一个企业级大文件上传解决方案，提供三种后端实现（Node.js、Python、Java）和多种前端组件，支持分片上传、断点续传、秒传等高级功能。
+
+### 🌟 核心特性
+
+- ✅ **分片上传** - 2MB 默认分片，支持超大文件
+- ✅ **断点续传** - 基于 SHA-256 哈希的智能续传
+- ✅ **秒传功能** - 文件哈希验证，相同文件瞬间完成
+- ✅ **多语言支持** - Node.js、Python、Java 三种后端实现
+- ✅ **并发控制** - 可配置并发上传数量
+- ✅ **进度追踪** - 实时上传进度和速度显示
+- ✅ **错误处理** - 完善的错误处理和重试机制
+- ✅ **文件验证** - 支持多种文件格式验证
+- ✅ **CORS 支持** - 完整的跨域请求支持
+
+## 🏗️ 技术架构
 
 ```
-packages/
-├── frontend/          # 前端核心包
-│   ├── src/
-│   │   ├── core/             # 核心引擎
-│   │   ├── hooks/            # React Hooks
-│   │   ├── components/       # UI组件
-│   │   ├── constants/        # 文件类型配置
-│   │   └── utils/           # 工具函数
-│   └── dist/               # 构建输出
-├── backend/           # 后端实现
-│   ├── node/               # Node.js实现
-│   ├── java/               # Java实现
-│   └── python/             # Python实现
-├── shared/            # 共享类型定义
-├── docs/              # 项目文档
-└── demo/              # 示例应用
+BigUpload/
+├── packages/backend/           # 后端实现
+│   ├── node/                  # Node.js + Express + TypeScript
+│   ├── python/                # Python + FastAPI + uvloop
+│   └── java/                  # Java + Spring Boot + Maven
+├── packages/frontend/          # 前端组件
+│   ├── react/                 # React + TypeScript 组件
+│   ├── vue/                   # Vue 3 组件
+│   └── vanilla/               # 原生 JavaScript 组件
+├── apps/                      # 演示应用
+│   ├── demo-react/            # React 演示应用
+│   ├── demo-vue/              # Vue 演示应用
+│   └── demo-java/             # Java Spring Boot 演示
+└── docs/                      # 文档和测试页面
 ```
 
 ## 🚀 快速开始
 
-### 安装
+### 环境要求
 
-```bash
-npm install @bigupload/react
-# 或
-yarn add @bigupload/react
-```
+- **Node.js**: >= 18.0
+- **Python**: >= 3.8
+- **Java**: >= 11
+- **Maven**: >= 3.6 (Java 项目)
 
-### 基础使用
-
-```jsx
-import { BigUploader, PREDEFINED_TYPES } from '@bigupload/react';
-
-function App() {
-  return (
-    <BigUploader
-      baseUrl="http://localhost:3000"
-      maxFileSize={1024 * 1024 * 1024} // 1GB
-      accept={PREDEFINED_TYPES.ALL_IMAGES} // 支持所有图片格式
-      onSuccess={(fileId, result) => {
-        console.log('上传成功:', result);
-      }}
-      onError={(fileId, error) => {
-        console.error('上传失败:', error);
-      }}
-    />
-  );
-}
-```
-
-### Ant Design风格
-
-```jsx
-import { BigAntUploader, VIDEO_TYPES } from '@bigupload/react';
-
-function VideoUploader() {
-  return (
-    <BigAntUploader
-      baseUrl="http://localhost:3000"
-      maxFileSize={5 * 1024 * 1024 * 1024} // 5GB
-      chunkSize={10 * 1024 * 1024}         // 10MB分片
-      accept={VIDEO_TYPES.EXTENSIONS}       // 支持所有视频格式
-      title="视频文件上传"
-      description="支持MP4、AVI、MOV等各种视频格式"
-      showDragger={true}
-    />
-  );
-}
-```
-
-### 自定义文件类型
-
-```jsx
-import { BigUploader, FileTypeUtils } from '@bigupload/react';
-
-// 使用预定义类型组合
-const customAccept = [
-  ...IMAGE_TYPES.EXTENSIONS,  // 所有图片
-  ...VIDEO_TYPES.EXTENSIONS,  // 所有视频
-  '.pdf', '.doc', '.docx'     // 特定文档
-];
-
-// 文件类型验证
-const handleFileSelect = (files) => {
-  files.forEach(file => {
-    const category = FileTypeUtils.getFileCategory(file);
-    console.log(`文件 ${file.name} 类型: ${category}`);
-    
-    if (FileTypeUtils.isVideo(file)) {
-      // 针对视频文件的特殊处理
-      console.log('这是视频文件，使用大分片上传');
-    }
-  });
-};
-```
-
-## 📚 文件类型支持
-
-### 预定义类型
-
-```javascript
-import { PREDEFINED_TYPES } from '@bigupload/react';
-
-// 所有文件
-PREDEFINED_TYPES.ALL
-
-// 所有图片 (50+ 格式)
-PREDEFINED_TYPES.ALL_IMAGES
-
-// 所有视频 (30+ 格式)
-PREDEFINED_TYPES.ALL_VIDEOS
-
-// 所有音频 (20+ 格式)
-PREDEFINED_TYPES.ALL_AUDIO
-
-// 所有文档
-PREDEFINED_TYPES.ALL_DOCUMENTS
-
-// 媒体文件 (图片+视频+音频)
-PREDEFINED_TYPES.MEDIA
-
-// 常用文件
-PREDEFINED_TYPES.COMMON
-```
-
-### 专业格式支持
-
-#### 图片设计文件
-- **Adobe**: PSD, AI, EPS, InDD
-- **Sketch**: .sketch
-- **Figma**: .fig
-- **相机RAW**: CR2, NEF, ARW, DNG等
-
-#### 专业视频格式
-- **广播级**: MXF, ProRes, DNxHD
-- **电影级**: R3D, BRAW
-- **高分辨率**: 4K, 8K, UHD
-
-#### 工程文件
-- **CAD**: DWG, DXF, STEP, IGES
-- **3D**: OBJ, FBX, GLTF, USD
-
-### 最佳实践
-
-```javascript
-// 根据业务场景优化配置
-const configs = {
-  // 图片上传
-  images: {
-    accept: PREDEFINED_TYPES.ALL_IMAGES,
-    maxFileSize: 50 * 1024 * 1024,  // 50MB
-    chunkSize: 1 * 1024 * 1024,     // 1MB
-    concurrent: 5
-  },
-  
-  // 视频上传
-  videos: {
-    accept: PREDEFINED_TYPES.ALL_VIDEOS,
-    maxFileSize: 5 * 1024 * 1024 * 1024,  // 5GB
-    chunkSize: 10 * 1024 * 1024,          // 10MB
-    concurrent: 2
-  },
-  
-  // 文档上传
-  documents: {
-    accept: PREDEFINED_TYPES.ALL_DOCUMENTS,
-    maxFileSize: 100 * 1024 * 1024,  // 100MB
-    chunkSize: 2 * 1024 * 1024,      // 2MB
-    concurrent: 3
-  }
-};
-```
-
-## 🔧 核心引擎
-
-直接使用核心引擎，适合需要完全自定义UI的场景：
-
-```javascript
-import { BigUploadEngine } from '@bigupload/react';
-
-const engine = new BigUploadEngine({
-  baseUrl: 'http://localhost:3000',
-  chunkSize: 2 * 1024 * 1024,
-  concurrent: 3
-});
-
-// 监听事件
-engine.on('progress', ({ fileId, progress }) => {
-  console.log(`文件 ${fileId} 上传进度: ${progress.percent}%`);
-});
-
-engine.on('success', ({ fileId, result }) => {
-  console.log(`文件 ${fileId} 上传成功`);
-});
-
-// 添加文件并开始上传
-const fileId = await engine.addFile(file);
-await engine.startUpload(fileId);
-```
-
-## 🎮 示例和演示
-
-### 在线演示
-- 🌐 **Web演示**: [http://localhost:5173](http://localhost:5173)
-- 📱 **移动端适配**: 响应式设计，支持移动设备
-
-### 本地运行
+### 一键启动所有服务
 
 ```bash
 # 克隆项目
 git clone <repository-url>
 cd bigupload
 
+# 启动所有后端服务
+./start-all-servers.sh
+
+# 或者分别启动
+./start-node-python.sh  # 启动 Node.js + Python
+```
+
+### 测试服务
+
+打开浏览器访问：
+
+- 测试页面: `test-all-backends.html`
+- Node.js 服务: http://localhost:3000
+- Python 服务: http://localhost:5000
+- Java 服务: http://localhost:8080
+
+## 🖥️ 后端使用
+
+### Node.js 后端
+
+**技术栈**: Express + TypeScript + Multer
+
+```bash
 # 安装依赖
+cd packages/backend/node
 npm install
 
-# 构建项目
-npm run build
-
-# 启动演示
+# 启动开发服务
 npm run dev
+
+# 生产构建
+npm run build
+npm start
 ```
 
-### 演示功能
-- ✅ 多种文件格式上传测试
-- ✅ 不同UI风格展示
-- ✅ 大文件分片上传
-- ✅ 断点续传功能
-- ✅ 批量文件上传
-- ✅ 实时进度监控
+**配置文件** (`config/default.json`):
 
-## 🏗️ 后端集成
-
-### Node.js
-```javascript
-const express = require('express');
-const { BigUploadHandler } = require('@bigupload/node');
-
-const app = express();
-const uploadHandler = new BigUploadHandler({
-  uploadDir: './uploads',
-  maxFileSize: 5 * 1024 * 1024 * 1024 // 5GB
-});
-
-app.use('/upload', uploadHandler.router);
+```json
+{
+  "port": 3000,
+  "uploadPath": "./uploads",
+  "tempPath": "./uploads/temp",
+  "chunkSize": 2097152,
+  "maxFileSize": 0,
+  "concurrent": 3
+}
 ```
 
-### Java Spring Boot
-```java
-@RestController
-@RequestMapping("/upload")
-public class BigUploadController {
-    
-    @Autowired
-    private BigUploadService uploadService;
-    
-    @PostMapping("/verify")
-    public ResponseEntity<?> verify(@RequestBody VerifyRequest request) {
-        return uploadService.verifyFile(request);
+### Python 后端
+
+**技术栈**: FastAPI + uvloop + aiofiles
+
+```bash
+# 安装依赖 (推荐使用 uv)
+cd packages/backend/python
+uv venv
+source .venv/bin/activate  # Windows: .venv\Scripts\activate
+uv pip install -r requirements.txt
+
+# 启动开发服务
+uv run uvicorn main:app --host 0.0.0.0 --port 5000 --reload
+
+# 生产启动
+uv run uvicorn main:app --host 0.0.0.0 --port 5000 --workers 4
+```
+
+**配置文件** (`config.py`):
+
+```python
+class Config:
+    UPLOAD_PATH = "./uploads"
+    TEMP_PATH = "./uploads/temp"
+    CHUNK_SIZE = 2 * 1024 * 1024  # 2MB
+    MAX_FILE_SIZE = 0  # 0 = 无限制
+    CONCURRENT = 3
+    BASE_URL = "http://localhost:5000"
+```
+
+### Java 后端
+
+**技术栈**: Spring Boot + Maven + Spring Web
+
+```bash
+# 编译安装 BigUpload Starter
+cd packages/backend/java
+mvn clean install
+
+# 启动演示应用
+cd ../../../apps/demo-java
+mvn spring-boot:run
+```
+
+**配置文件** (`application.yml`):
+
+```yaml
+bigupload:
+  upload-path: ./uploads
+  temp-path: ./uploads/temp
+  base-url: http://localhost:8080
+  max-file-size: 0 # 0 = 不限制
+  chunk-size: 2097152 # 2MB
+  concurrent: 3
+  api-prefix: /api/upload
+  enable-file-server: true
+  file-server-path: /files
+
+server:
+  port: 8080
+
+spring:
+  servlet:
+    multipart:
+      max-file-size: 100MB
+      max-request-size: 100MB
+```
+
+## 🎨 前端使用
+
+### React 组件
+
+```bash
+cd packages/frontend/react
+npm install
+```
+
+**基础使用**:
+
+```jsx
+import { BigUploader } from "@bigupload/react";
+
+function App() {
+  return (
+    <BigUploader
+      endpoint="http://localhost:3000"
+      chunkSize={2 * 1024 * 1024}
+      concurrent={3}
+      onProgress={(progress) => console.log("进度:", progress)}
+      onSuccess={(result) => console.log("上传成功:", result)}
+      onError={(error) => console.error("上传失败:", error)}
+    />
+  );
+}
+```
+
+### Vue 组件
+
+```bash
+cd packages/frontend/vue
+npm install
+```
+
+**基础使用**:
+
+```vue
+<template>
+  <BigUploader
+    :endpoint="endpoint"
+    :chunk-size="chunkSize"
+    :concurrent="3"
+    @progress="handleProgress"
+    @success="handleSuccess"
+    @error="handleError"
+  />
+</template>
+
+<script setup>
+import { BigUploader } from "@bigupload/vue";
+
+const endpoint = "http://localhost:3000";
+const chunkSize = 2 * 1024 * 1024;
+
+const handleProgress = (progress) => {
+  console.log("进度:", progress);
+};
+
+const handleSuccess = (result) => {
+  console.log("上传成功:", result);
+};
+
+const handleError = (error) => {
+  console.error("上传失败:", error);
+};
+</script>
+```
+
+### 原生 JavaScript
+
+```html
+<!DOCTYPE html>
+<html>
+  <head>
+    <script src="packages/frontend/vanilla/bigupload.min.js"></script>
+  </head>
+  <body>
+    <div id="uploader"></div>
+
+    <script>
+      const uploader = new BigUpload({
+        container: "#uploader",
+        endpoint: "http://localhost:3000",
+        chunkSize: 2 * 1024 * 1024,
+        concurrent: 3,
+        onProgress: (progress) => console.log("进度:", progress),
+        onSuccess: (result) => console.log("上传成功:", result),
+        onError: (error) => console.error("上传失败:", error),
+      });
+    </script>
+  </body>
+</html>
+```
+
+## 📚 API 文档
+
+### 统一接口规范
+
+所有后端实现都遵循相同的 API 规范：
+
+#### 1. 健康检查
+
+**Node.js**: `GET /`
+**Python**: `GET /api/upload/health`
+**Java**: `GET /api/upload/health`
+
+**响应**:
+
+```json
+{
+  "name": "服务名称",
+  "version": "1.0.0",
+  "status": "ok"
+}
+```
+
+#### 2. 文件验证（秒传/断点续传）
+
+**Node.js**: `POST /verify`
+**Python**: `POST /api/upload/verify`
+**Java**: `POST /api/upload/verify`
+
+**请求体**:
+
+```json
+{
+  "filename": "example.pdf",
+  "fileHash": "sha256-hash-value",
+  "fileSize": 1048576
+}
+```
+
+**响应**:
+
+```json
+{
+  "success": true,
+  "exists": false,
+  "finish": false,
+  "uploadedChunks": [],
+  "message": "文件不存在，可以开始上传"
+}
+```
+
+#### 3. 分片上传
+
+**Node.js**: `POST /upload-chunk`
+**Python**: `POST /api/upload/upload`
+**Java**: `POST /api/upload/upload`
+
+**请求** (FormData):
+
+- `chunk`: 文件分片 (File)
+- `chunkIndex`: 分片索引 (Number)
+- `fileHash`: 文件哈希值 (String)
+- `filename`: 文件名 (String)
+- **Java 额外参数**:
+  - `fileId`: 文件 ID (String)
+  - `fileName`: 文件名 (String)
+  - `chunkTotal`: 总分片数 (Number)
+
+**响应**:
+
+```json
+{
+  "success": true,
+  "chunkIndex": 0,
+  "uploadedChunks": [0],
+  "message": "分片上传成功"
+}
+```
+
+#### 4. 分片合并
+
+**Node.js**: `POST /merge-chunks`
+**Python**: `POST /api/upload/merge`
+**Java**: `POST /api/upload/merge`
+
+**请求体**:
+
+**Node.js/Python**:
+
+```json
+{
+  "fileHash": "sha256-hash-value",
+  "filename": "example.pdf",
+  "totalChunks": 5
+}
+```
+
+**Java**:
+
+```json
+{
+  "fileId": "file-id",
+  "fileName": "example.pdf",
+  "fileHash": "sha256-hash-value",
+  "chunkTotal": 5,
+  "fileSize": 1048576
+}
+```
+
+**响应**:
+
+```json
+{
+  "success": true,
+  "url": "http://localhost:3000/files/file-hash.pdf",
+  "message": "文件合并成功"
+}
+```
+
+## ⚙️ 配置说明
+
+### 通用配置项
+
+| 配置项        | 说明         | 默认值                  | 类型   |
+| ------------- | ------------ | ----------------------- | ------ |
+| `uploadPath`  | 文件上传路径 | `./uploads`             | String |
+| `tempPath`    | 临时文件路径 | `./uploads/temp`        | String |
+| `chunkSize`   | 分片大小     | `2097152` (2MB)         | Number |
+| `maxFileSize` | 最大文件大小 | `0` (无限制)            | Number |
+| `concurrent`  | 并发上传数   | `3`                     | Number |
+| `baseUrl`     | 服务基础 URL | `http://localhost:port` | String |
+
+### 支持的文件格式
+
+**图片格式** (50+):
+`jpg`, `jpeg`, `png`, `gif`, `bmp`, `svg`, `webp`, `tiff`, `ico`, 等
+
+**视频格式** (30+):
+`mp4`, `avi`, `mov`, `wmv`, `flv`, `webm`, `mkv`, `m4v`, 等
+
+**音频格式** (20+):
+`mp3`, `wav`, `flac`, `aac`, `ogg`, `wma`, `m4a`, 等
+
+**文档格式**:
+`pdf`, `doc`, `docx`, `xls`, `xlsx`, `ppt`, `pptx`, `txt`, 等
+
+**压缩格式**:
+`zip`, `rar`, `7z`, `tar`, `gz`, `bz2`, 等
+
+## 🚀 部署指南
+
+### Docker 部署
+
+#### Node.js 服务
+
+```dockerfile
+FROM node:18-alpine
+WORKDIR /app
+COPY packages/backend/node/ .
+RUN npm install --production
+EXPOSE 3000
+CMD ["npm", "start"]
+```
+
+#### Python 服务
+
+```dockerfile
+FROM python:3.11-slim
+WORKDIR /app
+COPY packages/backend/python/ .
+RUN pip install -r requirements.txt
+EXPOSE 5000
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "5000"]
+```
+
+#### Java 服务
+
+```dockerfile
+FROM openjdk:11-jre-slim
+WORKDIR /app
+COPY apps/demo-java/target/*.jar app.jar
+EXPOSE 8080
+CMD ["java", "-jar", "app.jar"]
+```
+
+### Docker Compose
+
+```yaml
+version: "3.8"
+services:
+  bigupload-node:
+    build:
+      context: .
+      dockerfile: Dockerfile.node
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./uploads:/app/uploads
+
+  bigupload-python:
+    build:
+      context: .
+      dockerfile: Dockerfile.python
+    ports:
+      - "5000:5000"
+    volumes:
+      - ./uploads:/app/uploads
+
+  bigupload-java:
+    build:
+      context: .
+      dockerfile: Dockerfile.java
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./uploads:/app/uploads
+
+  nginx:
+    image: nginx:alpine
+    ports:
+      - "80:80"
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf
+    depends_on:
+      - bigupload-node
+      - bigupload-python
+      - bigupload-java
+```
+
+### Nginx 负载均衡
+
+```nginx
+upstream bigupload_backend {
+    server localhost:3000 weight=3;
+    server localhost:5000 weight=2;
+    server localhost:8080 weight=1;
+}
+
+server {
+    listen 80;
+    server_name your-domain.com;
+
+    client_max_body_size 100M;
+
+    location /api/upload/ {
+        proxy_pass http://bigupload_backend;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+
+    location /files/ {
+        alias /var/www/uploads/;
+        expires 1y;
+        add_header Cache-Control "public, immutable";
     }
 }
 ```
 
-### Python FastAPI
-```python
-from fastapi import FastAPI
-from bigupload import BigUploadRouter
+## 🔧 故障排除
 
-app = FastAPI()
-upload_router = BigUploadRouter(
-    upload_dir="./uploads",
-    max_file_size=5 * 1024 * 1024 * 1024  # 5GB
-)
+### 常见问题
 
-app.include_router(upload_router, prefix="/upload")
+#### 1. CORS 跨域问题
+
+**症状**: 浏览器控制台显示 CORS 错误
+**解决**: 确保后端服务已配置 CORS 允许来源
+
+**Node.js**:
+
+```javascript
+app.use(
+  cors({
+    origin: ["http://localhost:3000", "https://your-domain.com"],
+    credentials: true,
+  })
+);
 ```
 
-## 📖 文档
+**Python**:
 
-- 📚 [完整文档](./packages/docs/)
-- 🎯 [API参考](./packages/docs/api.md)
-- 📁 [文件类型支持](./packages/docs/file-types.md)
-- 🏗️ [架构设计](./packages/docs/architecture.md)
-- 🔧 [自定义开发](./packages/docs/customization.md)
+```python
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+```
 
-## 🤝 贡献
+#### 2. 文件大小限制
 
-欢迎提交Issues和Pull Requests！
+**症状**: 大文件上传失败
+**解决**: 调整服务器文件大小限制
+
+**Java**:
+
+```yaml
+spring:
+  servlet:
+    multipart:
+      max-file-size: 500MB
+      max-request-size: 500MB
+```
+
+#### 3. 分片合并失败
+
+**症状**: 分片上传成功但合并失败
+**解决**:
+
+- 检查临时目录权限
+- 确认所有分片都已上传
+- 验证参数格式是否正确
+
+#### 4. 速度异常
+
+**症状**: 上传速度显示异常
+**解决**:
+
+- 检查网络连接
+- 调整分片大小
+- 降低并发数量
+
+### 性能优化
+
+#### 1. 分片大小调优
+
+```javascript
+// 根据网络条件调整
+const chunkSize =
+  navigator.connection?.effectiveType === "4g"
+    ? 5 * 1024 * 1024 // 5MB (高速网络)
+    : 1 * 1024 * 1024; // 1MB (低速网络)
+```
+
+#### 2. 并发控制
+
+```javascript
+// 根据文件大小动态调整
+const concurrent = fileSize > 100 * 1024 * 1024 ? 5 : 3;
+```
+
+#### 3. 内存优化
+
+```javascript
+// 使用流式处理大文件
+const stream = file.stream();
+const reader = stream.getReader();
+```
+
+## 📈 监控和日志
+
+### 日志配置
+
+**Node.js** (winston):
+
+```javascript
+const logger = winston.createLogger({
+  level: "info",
+  format: winston.format.json(),
+  transports: [
+    new winston.transports.File({ filename: "upload.log" }),
+    new winston.transports.Console(),
+  ],
+});
+```
+
+**Python** (loguru):
+
+```python
+from loguru import logger
+
+logger.add("upload.log", rotation="100 MB", retention="30 days")
+```
+
+**Java** (logback):
+
+```xml
+<configuration>
+    <appender name="FILE" class="ch.qos.logback.core.FileAppender">
+        <file>upload.log</file>
+        <encoder>
+            <pattern>%d{HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n</pattern>
+        </encoder>
+    </appender>
+    <root level="info">
+        <appender-ref ref="FILE" />
+    </root>
+</configuration>
+```
+
+### 监控指标
+
+- 上传成功率
+- 平均上传速度
+- 错误率统计
+- 服务响应时间
+- 磁盘使用率
+
+## 🤝 贡献指南
 
 1. Fork 项目
-2. 创建特性分支 (`git checkout -b feature/AmazingFeature`)
-3. 提交更改 (`git commit -m 'Add some AmazingFeature'`)
-4. 推送到分支 (`git push origin feature/AmazingFeature`)
+2. 创建特性分支 (`git checkout -b feature/amazing-feature`)
+3. 提交更改 (`git commit -m 'Add amazing feature'`)
+4. 推送到分支 (`git push origin feature/amazing-feature`)
 5. 打开 Pull Request
 
 ## 📄 许可证
@@ -340,8 +701,14 @@ app.include_router(upload_router, prefix="/upload")
 
 ## 🙏 致谢
 
-感谢所有贡献者和开源社区的支持！
+- [Express](https://expressjs.com/) - Node.js Web 框架
+- [FastAPI](https://fastapi.tiangolo.com/) - Python Web 框架
+- [Spring Boot](https://spring.io/projects/spring-boot) - Java 应用框架
+- [React](https://reactjs.org/) - 前端 UI 库
+- [Vue.js](https://vuejs.org/) - 渐进式前端框架
 
 ---
 
-**BigUpload** - 让大文件上传变得简单高效！ 🚀 
+<div align="center">
+Made with ❤️ by BigUpload Team
+</div>

@@ -35,11 +35,13 @@
   margin-top: auto;
 }
 
-/* 数据展示相关 */
+/* 数据展示相关 - 扁平化设计 */
+
 .performance-highlight {
-  background: linear-gradient(135deg, #f6ffed 0%, #e6fffb 100%);
-  border: 1px solid #b7eb8f;
-  border-radius: 8px;
+background: #f6ffed;
+border: 2px solid #52c41a;
+border-radius: 4px;
+
   padding: 16px;
   margin: 16px 0;
 }
@@ -48,6 +50,50 @@
   margin: 0;
   color: #52c41a;
   font-weight: 600;
+}
+
+/* 多服务器上传测试样式 */
+.multi-server-test {
+  background: #ffffff;
+}
+
+.server-card {
+  border-radius: 4px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  transition: all 0.2s ease;
+}
+
+.server-card:hover {
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+  transform: translateY(-1px);
+}
+
+.upload-section {
+  border-radius: 4px;
+  border: 2px dashed #d9d9d9;
+  background: #fafafa;
+}
+
+.upload-section:hover {
+  border-color: #1890ff;
+  background: #f0f8ff;
+}
+
+.stats-card {
+  border-radius: 4px;
+  border: 1px solid #f0f0f0;
+  background: #ffffff;
+}
+
+.flat-button {
+  border-radius: 4px;
+  box-shadow: none;
+  border: 1px solid transparent;
+}
+
+.flat-button:hover {
+  transform: none;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
 }
 
 /* 响应式设计 */

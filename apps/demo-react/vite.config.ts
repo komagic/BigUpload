@@ -8,6 +8,14 @@ export default defineConfig({
   resolve: {
     alias: {
       "@": resolve(__dirname, "./src"),
+      "@bigupload/frontend": resolve(
+        __dirname,
+        "../../packages/frontend/src/index"
+      ),
+      "@bigupload/shared": resolve(
+        __dirname,
+        "../../packages/shared/src/index"
+      ),
     },
   },
   server: {

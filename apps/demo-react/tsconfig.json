@@ -16,7 +16,9 @@
     "jsx": "react-jsx",
     "baseUrl": ".",
     "paths": {
-      "@/*": ["src/*"]
+      "@/*": ["src/*"],
+      "@bigupload/frontend": ["../../packages/frontend/src/index"],
+      "@bigupload/shared": ["../../packages/shared/src/index"]
     }
   },
   "include": ["src"],

@@ -1,14 +1,20 @@
 package com.bigupload.controller;
 
+import com.bigupload.config.BigUploadProperties;
 import com.bigupload.service.FileUploadService;
 import com.bigupload.dto.*;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.core.io.FileSystemResource;
+import org.springframework.core.io.Resource;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
 import javax.servlet.http.HttpServletRequest;
+import java.io.File;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -24,6 +30,7 @@ import java.util.Map;
 public class FileUploadController {
 
     private final FileUploadService fileUploadService;
+    private final BigUploadProperties properties;
 
     /**
      * 验证文件是否存在（秒传/断点续传）
@@ -60,9 +67,9 @@ public class FileUploadController {
 
     /**
      * 上传单个分片
-     * POST /upload
+     * POST /upload-chunk
      */
-    @PostMapping("/upload")
+    @PostMapping("/upload-chunk")
     public ResponseEntity<Map<String, Object>> uploadChunk(
             @RequestParam("chunk") MultipartFile chunk,
             @RequestParam("fileId") String fileId,
@@ -108,9 +115,9 @@ public class FileUploadController {
 
     /**
      * 合并所有分片
-     * POST /merge
+     * POST /merge-chunks
      */
-    @PostMapping("/merge")
+    @PostMapping("/merge-chunks")
     public ResponseEntity<Map<String, Object>> mergeChunks(@RequestBody MergeRequest request) {
         log.info("合并分片请求: {}", request);
         
@@ -134,14 +141,55 @@ public class FileUploadController {
     }
 
     /**
-     * 健康检查
+     * 首页信息
+     */
+    @GetMapping("/")
+    public ResponseEntity<Map<String, Object>> index() {
+        Map<String, Object> result = new HashMap<>();
+        result.put("name", "FastUploader Java Backend");
+        result.put("version", "1.0.0");
+        result.put("status", "running");
+        return ResponseEntity.ok(result);
+    }
+
+    /**
+     * 健康检查 (保持兼容性)
      */
     @GetMapping("/health")
     public ResponseEntity<Map<String, Object>> health() {
         Map<String, Object> result = new HashMap<>();
-        result.put("status", "ok");
-        result.put("service", "BigUpload Spring Boot Starter");
+        result.put("name", "FastUploader Java Backend");
         result.put("version", "1.0.0");
+        result.put("status", "running");
         return ResponseEntity.ok(result);
+    }
+
+    /**
+     * 获取上传的文件
+     * GET /files/:filename
+     */
+    @GetMapping("/files/{filename}")
+    public ResponseEntity<Resource> getFile(@PathVariable String filename) {
+        try {
+            File file = new File(properties.getUploadPath(), filename);
+            
+            if (!file.exists() || !file.isFile()) {
+                Map<String, Object> error = new HashMap<>();
+                error.put("success", false);
+                error.put("message", "文件不存在");
+                return ResponseEntity.notFound().build();
+            }
+            
+            Resource resource = new FileSystemResource(file);
+            
+            return ResponseEntity.ok()
+                    .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + filename + "\"")
+                    .contentType(MediaType.APPLICATION_OCTET_STREAM)
+                    .contentLength(file.length())
+                    .body(resource);
+        } catch (Exception e) {
+            log.error("获取文件失败: {}", filename, e);
+            return ResponseEntity.internalServerError().build();
+        }
     }
 } 

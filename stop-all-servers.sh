@@ -7,14 +7,14 @@ echo "=================================="
 stop_service() {
     SERVICE_NAME=$1
     PID_FILE=$2
-    
+
     if [ -f "$PID_FILE" ]; then
         PID=$(cat $PID_FILE)
-        if ps -p $PID > /dev/null 2>&1; then
+        if ps -p $PID >/dev/null 2>&1; then
             echo "🛑 停止 $SERVICE_NAME 服务 (PID: $PID)..."
             kill $PID
             sleep 3
-            if ps -p $PID > /dev/null 2>&1; then
+            if ps -p $PID >/dev/null 2>&1; then
                 echo "⚠️  强制停止 $SERVICE_NAME 服务..."
                 kill -9 $PID
             fi
@@ -58,10 +58,17 @@ if [ ! -z "$PYTHON_PIDS" ]; then
 fi
 
 # 查找Java进程
-JAVA_PIDS=$(pgrep -f "demo-java")
+JAVA_PIDS=$(pgrep -f "packages/backend/java")
 if [ ! -z "$JAVA_PIDS" ]; then
     echo "🛑 停止额外的Java进程: $JAVA_PIDS"
     kill $JAVA_PIDS 2>/dev/null
+fi
+
+# 也查找BigUpload Spring Boot应用
+BIGUPLOAD_JAVA_PIDS=$(pgrep -f "com.bigupload.Application")
+if [ ! -z "$BIGUPLOAD_JAVA_PIDS" ]; then
+    echo "🛑 停止BigUpload Java应用进程: $BIGUPLOAD_JAVA_PIDS"
+    kill $BIGUPLOAD_JAVA_PIDS 2>/dev/null
 fi
 
 echo ""
@@ -69,10 +76,10 @@ echo "✅ 所有BigUpload服务已停止"
 echo ""
 echo "📊 端口状态检查:"
 lsof -i :3000 | grep LISTEN && echo "⚠️  端口3000仍被占用" || echo "✅ 端口3000已释放"
-lsof -i :5000 | grep LISTEN && echo "⚠️  端口5000仍被占用" || echo "✅ 端口5000已释放"  
+lsof -i :5000 | grep LISTEN && echo "⚠️  端口5000仍被占用" || echo "✅ 端口5000已释放"
 lsof -i :8080 | grep LISTEN && echo "⚠️  端口8080仍被占用" || echo "✅ 端口8080已释放"
 
 echo ""
 echo "🧹 清理临时文件..."
 rm -f logs/*.pid
-echo "✅ 清理完成" 
+echo "✅ 清理完成"

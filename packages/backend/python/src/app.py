@@ -234,6 +234,17 @@ def index():
         'status': 'running'
     })
 
+@app.route('/health')
+def health():
+    """
+    健康检查端点 (保持兼容性)
+    """
+    return jsonify({
+        'name': 'FastUploader Python Backend',
+        'version': '1.0.0',
+        'status': 'running'
+    })
+
 if __name__ == '__main__':
     PORT = int(os.environ.get('PORT', 5000))
     app.run(host='0.0.0.0', port=PORT, debug=True) 

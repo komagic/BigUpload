@@ -48,7 +48,7 @@ public class BigUploadAutoConfiguration implements WebMvcConfigurer {
     @ConditionalOnMissingBean
     public FileUploadController fileUploadController(FileUploadService fileUploadService) {
         log.info("创建FileUploadController Bean");
-        return new FileUploadController(fileUploadService);
+        return new FileUploadController(fileUploadService, properties);
     }
 
     /**

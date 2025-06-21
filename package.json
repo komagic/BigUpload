@@ -21,7 +21,12 @@
     "demo:java": "echo 'Starting Java demo...' && cd apps/demo-java && mvn spring-boot:run",
     "demo:python": "echo 'Starting Python demo...' && cd apps/demo-python && python main.py",
     "install:python": "cd packages/backend/python && pip install -e .",
-    "install:java": "cd packages/backend/java && mvn install"
+    "install:java": "cd packages/backend/java && mvn install",
+    "version:update": "./update-version.sh",
+    "build:all": "./build-and-publish-all.sh",
+    "publish:local": "./build-and-publish-all.sh",
+    "publish:test": "./build-and-publish-all.sh",
+    "publish:prod": "./build-and-publish-all.sh"
   },
   "keywords": [
     "upload",
