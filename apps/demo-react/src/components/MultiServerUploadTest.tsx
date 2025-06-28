@@ -40,7 +40,7 @@ import {
   type UploadProgress,
   type UploadResult,
   type UploadError,
-} from "@bigupload/frontend";
+} from "bigupload-frontend";
 
 const { Title, Text, Paragraph } = Typography;
 const { Dragger } = Upload;

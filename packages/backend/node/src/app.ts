@@ -4,46 +4,83 @@ import fs from "fs-extra";
 import path from "path";
 import multer from "multer";
 import crypto from "crypto";
-// 移除 SparkMD5 依赖，使用原生 crypto 模块
 import dotenv from "dotenv";
 
 // 加载配置
 dotenv.config();
+
+// 定义本地接口类型（避免依赖shared包）
+interface VerifyResponse {
+  exists: boolean;
+  fileId?: string;
+  url?: string;
+  uploadedChunks?: number[];
+  message?: string;
+  success?: boolean;
+  finish?: boolean;
+}
+
+interface UploadResponse {
+  success: boolean;
+  fileId?: string;
+  url?: string;
+  message?: string;
+  completed?: boolean;
+}
+
+interface FileMetadata {
+  fileName: string;
+  fileHash: string;
+  chunkTotal: number;
+  uploadedChunks: number[];
+  createdAt: string;
+  lastUpdated: string;
+}
 
 const app = express();
 const port = process.env.PORT || 3000;
 
 // 中间件
 app.use(cors());
-app.use(express.json());
+app.use(express.json({ limit: "10mb" }));
+app.use(express.urlencoded({ extended: true, limit: "10mb" }));
 
 // 设置请求超时
-app.use((req, res, next) => {
-  // 为上传请求设置更长的超时时间
-  if (req.path.includes('/upload-chunk') || req.path.includes('/merge-chunks')) {
-    req.setTimeout(5 * 60 * 1000); // 5分钟
-    res.setTimeout(5 * 60 * 1000);
-  } else {
-    req.setTimeout(30 * 1000); // 30秒
-    res.setTimeout(30 * 1000);
+app.use(
+  (req: express.Request, res: express.Response, next: express.NextFunction) => {
+    // 为上传请求设置更长的超时时间
+    if (
+      req.path.includes("/upload-chunk") ||
+      req.path.includes("/merge-chunks")
+    ) {
+      req.setTimeout(5 * 60 * 1000); // 5分钟
+      res.setTimeout(5 * 60 * 1000);
+    } else {
+      req.setTimeout(30 * 1000); // 30秒
+      res.setTimeout(30 * 1000);
+    }
+    next();
   }
-  next();
-});
+);
 
 // 简单的并发限制
 let activeUploads = 0;
 const MAX_CONCURRENT_UPLOADS = 10;
 
-const concurrencyLimiter = (req: any, res: any, next: any) => {
-  if (req.path.includes('/upload-chunk')) {
+const concurrencyLimiter = (
+  req: express.Request,
+  res: express.Response,
+  next: express.NextFunction
+) => {
+  if (req.path.includes("/upload-chunk")) {
     if (activeUploads >= MAX_CONCURRENT_UPLOADS) {
       return res.status(429).json({
         success: false,
-        message: '服务器繁忙，请稍后重试',
+        message: "服务器繁忙，请稍后重试",
       });
     }
     activeUploads++;
-    res.on('finish', () => {
+    res.on("finish", () => {
       activeUploads--;
     });
   }
@@ -51,7 +88,6 @@ const concurrencyLimiter = (req: any, res: any, next: any) => {
 };
 
 app.use(concurrencyLimiter);
-app.use(express.urlencoded({ extended: true }));
 
 // 上传目录
 const UPLOAD_DIR = path.resolve(__dirname, "../uploads");
@@ -62,13 +98,13 @@ fs.ensureDirSync(UPLOAD_DIR);
 fs.ensureDirSync(TEMP_DIR);
 
 // 文件元数据存储（内存 + 文件持久化）
-const fileMetadata: Record<string, any> = {};
+const fileMetadata: Record<string, FileMetadata> = {};
 
 // 元数据持久化文件路径
 const METADATA_FILE = path.resolve(TEMP_DIR, "metadata.json");
 
 // 加载元数据
-const loadMetadata = async () => {
+const loadMetadata = async (): Promise<void> => {
   try {
     if (await fs.pathExists(METADATA_FILE)) {
       const data = await fs.readJson(METADATA_FILE);
@@ -81,7 +117,7 @@ const loadMetadata = async () => {
 };
 
 // 保存元数据
-const saveMetadata = async () => {
+const saveMetadata = async (): Promise<void> => {
   try {
     await fs.writeJson(METADATA_FILE, fileMetadata, { spaces: 2 });
   } catch (error) {
@@ -120,18 +156,22 @@ const upload = multer({
 // 路由
 app.get("/", (req, res) => {
   res.json({
-    name: "FastUploader Node.js Backend",
-    version: "1.0.0",
+    name: "BigUpload Node.js Backend",
+    version: "1.0.1",
     status: "running",
+    timestamp: new Date().toISOString(),
   });
 });
 
-// 健康检查端点 (保持兼容性)
+// 健康检查端点
 app.get("/health", (req, res) => {
   res.json({
-    name: "FastUploader Node.js Backend",
-    version: "1.0.0",
-    status: "running",
+    name: "BigUpload Node.js Backend",
+    version: "1.0.1",
+    status: "healthy",
+    uptime: process.uptime(),
+    memory: process.memoryUsage(),
+    timestamp: new Date().toISOString(),
   });
 });
 
@@ -216,7 +256,7 @@ app.post("/verify", async (req, res) => {
   }
 });
 
-// 上传分片
+// 上传分片 - 修复文件处理逻辑
 app.post("/upload-chunk", upload.single("chunk"), async (req, res) => {
   try {
     const { file } = req;
@@ -234,8 +274,8 @@ app.post("/upload-chunk", upload.single("chunk"), async (req, res) => {
       chunkIndex,
       chunkTotal,
       fileHash,
+      fileSize: file.size,
     });
-    console.log(`chunkIndex类型: ${typeof chunkIndex}, 值: ${chunkIndex}`);
 
     if (!fileId || !fileName || !fileHash) {
       return res.status(400).json({
@@ -246,45 +286,61 @@ app.post("/upload-chunk", upload.single("chunk"), async (req, res) => {
 
     // 确保文件目录存在
     const fileDir = path.resolve(TEMP_DIR, fileId);
-    fs.ensureDirSync(fileDir);
+    await fs.ensureDir(fileDir);
 
-    // 移动文件到正确的位置
+    // 目标文件路径
     const chunkIndexStr = chunkIndex.toString();
-    console.log(
-      `将chunkIndex转换为字符串: ${chunkIndexStr}, 类型: ${typeof chunkIndexStr}`
-    );
-
     const targetPath = path.resolve(fileDir, chunkIndexStr);
-    console.log(`源文件路径: ${file.path}`);
-    console.log(`目标路径: ${targetPath}`);
+
+    console.log(`处理分片文件: ${file.path} -> ${targetPath}`);
 
     // 检查源文件是否存在
     if (!(await fs.pathExists(file.path))) {
       console.error(`源文件不存在: ${file.path}`);
       return res.status(500).json({
         success: false,
-        message: `源文件不存在: ${file.path}`,
+        message: `源文件不存在`,
       });
     }
 
+    // 改进的文件处理逻辑
     try {
+      // 首先尝试移动文件
       await fs.move(file.path, targetPath, { overwrite: true });
-      console.log(`文件已移动到: ${targetPath}`);
+      console.log(`文件成功移动到: ${targetPath}`);
     } catch (moveError) {
-      console.error(`文件移动失败:`, moveError);
+      console.warn(`文件移动失败，尝试复制:`, moveError);
 
-      // 尝试复制文件作为备用方案
       try {
+        // 如果移动失败，尝试复制
         await fs.copy(file.path, targetPath, { overwrite: true });
-        await fs.remove(file.path);
-        console.log(`文件已复制到: ${targetPath}`);
-      } catch (copyError: any) {
+
+        // 复制成功后删除源文件
+        try {
+          await fs.remove(file.path);
+        } catch (removeError) {
+          console.warn("删除源文件失败:", removeError);
+          // 不影响主流程，继续执行
+        }
+
+        console.log(`文件成功复制到: ${targetPath}`);
+      } catch (copyError) {
         console.error(`文件复制也失败:`, copyError);
         return res.status(500).json({
           success: false,
-          message: `文件处理失败: ${copyError.message || copyError}`,
+          message: `文件处理失败: ${(copyError as Error).message}`,
         });
       }
+    }
+
+    // 验证目标文件是否存在且有内容
+    const targetStats = await fs.stat(targetPath);
+    if (targetStats.size === 0) {
+      console.error(`目标文件大小为0: ${targetPath}`);
+      return res.status(500).json({
+        success: false,
+        message: "文件分片保存失败",
+      });
     }
 
     // 更新文件元数据
@@ -301,12 +357,9 @@ app.post("/upload-chunk", upload.single("chunk"), async (req, res) => {
 
     // 添加已上传的分片索引
     const chunkIdx = parseInt(chunkIndex);
-    console.log(
-      `将chunkIndex解析为整数: ${chunkIdx}, 类型: ${typeof chunkIdx}`
-    );
-
     if (!fileMetadata[fileId].uploadedChunks.includes(chunkIdx)) {
       fileMetadata[fileId].uploadedChunks.push(chunkIdx);
+      fileMetadata[fileId].uploadedChunks.sort((a, b) => a - b); // 排序
       fileMetadata[fileId].lastUpdated = new Date().toISOString();
 
       // 异步保存元数据，不阻塞响应
@@ -314,23 +367,20 @@ app.post("/upload-chunk", upload.single("chunk"), async (req, res) => {
     }
 
     console.log(
-      `当前已上传分片: ${fileMetadata[fileId].uploadedChunks.join(", ")}`
+      `分片 ${chunkIndex} 上传成功，已上传 ${fileMetadata[fileId].uploadedChunks.length}/${chunkTotal} 个分片`
     );
 
     // 检查是否所有分片都已上传完成
     const allChunksUploaded =
       fileMetadata[fileId].uploadedChunks.length === parseInt(chunkTotal);
 
-    console.log(
-      `分片 ${chunkIndex} 上传成功，已上传 ${fileMetadata[fileId].uploadedChunks.length}/${chunkTotal} 个分片`
-    );
-    console.log(`所有分片是否已上传完成: ${allChunksUploaded}`);
-
     return res.json({
       success: true,
       fileId,
       message: `分片 ${chunkIndex}/${chunkTotal} 上传成功`,
-      completed: allChunksUploaded, // 添加标志表示是否所有分片都已上传完成
+      completed: allChunksUploaded,
+      uploadedChunks: fileMetadata[fileId].uploadedChunks.length,
+      totalChunks: parseInt(chunkTotal),
     });
   } catch (error) {
     console.error("上传分片错误:", error);
@@ -347,10 +397,11 @@ app.post("/merge-chunks", async (req, res) => {
     const { fileId, fileName, fileHash, chunkTotal, fileSize } = req.body;
 
     if (!fileId || !fileName || !fileHash || !chunkTotal) {
-      return res.status(400).json({
+      res.status(400).json({
         success: false,
         message: "参数不完整",
       });
+      return;
     }
 
     console.log(
@@ -360,10 +411,11 @@ app.post("/merge-chunks", async (req, res) => {
     // 获取文件元数据
     const metadata = fileMetadata[fileId];
     if (!metadata) {
-      return res.status(404).json({
+      res.status(404).json({
         success: false,
         message: "文件元数据不存在",
       });
+      return;
     }
 
     const expectedChunkTotal = parseInt(chunkTotal);
@@ -371,10 +423,11 @@ app.post("/merge-chunks", async (req, res) => {
 
     // 检查临时目录是否存在
     if (!(await fs.pathExists(fileDir))) {
-      return res.status(404).json({
+      res.status(404).json({
         success: false,
         message: "文件分片目录不存在",
       });
+      return;
     }
 
     // 动态检查实际存在的分片文件（更可靠的方法）
@@ -409,15 +462,24 @@ app.post("/merge-chunks", async (req, res) => {
 
     // 更宽容的完整性检查：允许最多5%的分片丢失（对于网络问题的容错）
     if (missingRate > 0.05) {
-      return res.status(400).json({
+      res.status(400).json({
         success: false,
-        message: `分片不完整: 找到${actualChunks.length}/${expectedChunkTotal}个分片，缺失率过高(${(missingRate * 100).toFixed(1)}%)`,
+        message: `分片不完整: 找到${
+          actualChunks.length
+        }/${expectedChunkTotal}个分片，缺失率过高(${(missingRate * 100).toFixed(
+          1
+        )}%)`,
       });
+      return;
     }
 
     // 如果有少量分片缺失，记录警告但继续合并
     if (missingChunks.length > 0) {
-      console.warn(`警告: 发现${missingChunks.length}个缺失分片，但继续合并: [${missingChunks.join(', ')}]`);
+      console.warn(
+        `警告: 发现${
+          missingChunks.length
+        }个缺失分片，但继续合并: [${missingChunks.join(", ")}]`
+      );
     }
 
     // 获取文件扩展名
@@ -433,12 +495,13 @@ app.post("/merge-chunks", async (req, res) => {
       // 清理临时文件夹
       await fs.remove(fileDir);
 
-      return res.json({
+      res.json({
         success: true,
         fileId,
         url: fileUrl,
         message: "文件已存在，无需合并",
       });
+      return;
     }
 
     // 合并文件
@@ -450,7 +513,7 @@ app.post("/merge-chunks", async (req, res) => {
     // 按顺序合并存在的分片
     for (let i = 0; i < expectedChunkTotal; i++) {
       const chunkPath = path.resolve(fileDir, i.toString());
-      
+
       if (actualChunks.includes(i)) {
         console.log(`合并分片 ${i}/${expectedChunkTotal - 1}`);
         try {
@@ -473,10 +536,10 @@ app.post("/merge-chunks", async (req, res) => {
 
     // 等待文件写入完成
     await new Promise<void>((resolve, reject) => {
-      writeStream.on('finish', () => {
+      writeStream.on("finish", () => {
         resolve();
       });
-      writeStream.on('error', (error) => {
+      writeStream.on("error", (error) => {
         reject(error);
       });
     });
@@ -492,12 +555,18 @@ app.post("/merge-chunks", async (req, res) => {
       const expectedSize = parseInt(fileSize);
       const sizeDiff = Math.abs(stats.size - expectedSize);
       const sizeErrorRate = sizeDiff / expectedSize;
-      
-      console.log(`期望大小: ${expectedSize}, 实际大小: ${stats.size}, 误差: ${sizeDiff} 字节 (${(sizeErrorRate * 100).toFixed(2)}%)`);
-      
+
+      console.log(
+        `期望大小: ${expectedSize}, 实际大小: ${
+          stats.size
+        }, 误差: ${sizeDiff} 字节 (${(sizeErrorRate * 100).toFixed(2)}%)`
+      );
+
       // 允许5%的大小误差（考虑到可能的分片丢失）
       if (sizeErrorRate > 0.05) {
-        console.warn(`文件大小误差过大，但仍然保留文件: 期望=${expectedSize}, 实际=${stats.size}`);
+        console.warn(
+          `文件大小误差过大，但仍然保留文件: 期望=${expectedSize}, 实际=${stats.size}`
+        );
         // 不删除文件，记录警告即可
       }
     }
@@ -512,7 +581,9 @@ app.post("/merge-chunks", async (req, res) => {
         const calculatedHash = hash.digest("hex");
 
         if (calculatedHash !== fileHash) {
-          console.warn(`哈希验证失败但文件已保存: 期望=${fileHash}, 实际=${calculatedHash}`);
+          console.warn(
+            `哈希验证失败但文件已保存: 期望=${fileHash}, 实际=${calculatedHash}`
+          );
           // 不删除文件，因为部分内容可能是有效的
         } else {
           console.log(`文件哈希验证成功: ${calculatedHash}`);
@@ -539,23 +610,26 @@ app.post("/merge-chunks", async (req, res) => {
     saveMetadata().catch((err) => console.error("保存元数据失败:", err));
 
     const fileUrl = `/files/${targetFilename}`;
-    
+
     // 构建响应消息
     let message = "文件合并成功";
     if (missingChunks.length > 0) {
       message += ` (注意: ${missingChunks.length}个分片丢失，文件可能不完整)`;
     }
 
-    return res.json({
+    res.json({
       success: true,
       fileId,
       url: fileUrl,
       message,
-      warning: missingChunks.length > 0 ? `${missingChunks.length} chunks missing` : undefined,
+      warning:
+        missingChunks.length > 0
+          ? `${missingChunks.length} chunks missing`
+          : undefined,
     });
   } catch (error) {
     console.error("合并文件错误:", error);
-    return res.status(500).json({
+    res.status(500).json({
       success: false,
       message: (error as Error).message || "服务器错误",
     });
@@ -609,10 +683,11 @@ app.get("/status/:fileId", (req, res) => {
     const metadata = fileMetadata[fileId];
 
     if (!metadata) {
-      return res.status(404).json({
+      res.status(404).json({
         success: false,
         message: "文件元数据不存在",
       });
+      return;
     }
 
     res.json({
@@ -636,16 +711,23 @@ app.get("/files/:filename", (req, res) => {
 
   // 检查文件是否存在
   if (!fs.existsSync(filepath)) {
-    return res.status(404).json({
+    res.status(404).json({
       success: false,
       message: "文件不存在",
     });
+    return;
   }
 
   res.sendFile(filepath);
 });
 
 // 启动服务
-app.listen(port, () => {
-  console.log(`FastUploader Node.js 后端服务运行在 http://localhost:${port}`);
-});
+if (require.main === module) {
+  // 只有在直接运行此文件时才启动服务器
+  app.listen(port, () => {
+    console.log(`FastUploader Node.js 后端服务运行在 http://localhost:${port}`);
+  });
+}
+
+// 导出应用实例以供测试使用
+export default app;

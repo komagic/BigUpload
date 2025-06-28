@@ -1,4 +1,4 @@
-import { FileHasher } from "@bigupload/shared";
+import { FileHasher } from "bigupload-shared";
 // 移除 SparkMD5 依赖，使用 Web Crypto API
 
 export class WebFileHasher implements FileHasher {

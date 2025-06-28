@@ -5,7 +5,7 @@ import {
   UploadResponse,
   UploadError,
   UploadErrorType,
-} from "@bigupload/shared";
+} from "bigupload-shared";
 import { UploaderService } from "./UploaderService";
 
 // 文件大小格式化

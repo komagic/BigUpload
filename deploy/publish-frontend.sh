@@ -1,9 +1,9 @@
 #!/bin/bash
 
-echo "📦 发布前端包 (@bigupload/frontend)"
+echo "📦 发布前端包 (bigupload-frontend)"
 
 MODE=${1:-prod}
-PACKAGE_DIR="../packages/frontend"
+PACKAGE_DIR="./packages/frontend"
 
 # 检查目录存在
 if [ ! -d "$PACKAGE_DIR" ]; then
@@ -39,14 +39,14 @@ fi
 echo "🚀 发布包..."
 if [ "$MODE" = "test" ]; then
     # 发布到测试环境（使用 --dry-run 或 verdaccio）
-    npm publish --dry-run
+    npm publish --dry-run --registry https://registry.npmjs.org/
 else
     # 发布到生产环境
-    if ! npm publish; then
+    if ! npm publish --registry https://registry.npmjs.org/; then
         echo "❌ 发布失败"
         exit 1
     fi
 fi
 
 echo "✅ 前端包发布完成"
-cd - >/dev/null 
+cd - >/dev/null

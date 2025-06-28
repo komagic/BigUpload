@@ -1,13 +1,20 @@
 #!/bin/bash
 
-echo "📦 发布共享包 (@bigupload/shared)"
+echo "📦 发布共享包 (bigupload-shared)"
 
 MODE=${1:-prod}
-PACKAGE_DIR="../packages/shared"
+PACKAGE_DIR="./packages/shared"
 
 # 检查目录存在
 if [ ! -d "$PACKAGE_DIR" ]; then
     echo "❌ 目录不存在: $PACKAGE_DIR"
+    exit 1
+fi
+
+# 在根目录安装依赖（确保workspace依赖正确链接）
+echo "📥 安装workspace依赖..."
+if ! npm install; then
+    echo "❌ workspace依赖安装失败"
     exit 1
 fi
 
@@ -21,13 +28,6 @@ fi
 
 echo "📂 当前目录: $(pwd)"
 
-# 安装依赖
-echo "📥 安装依赖..."
-if ! npm install; then
-    echo "❌ 依赖安装失败"
-    exit 1
-fi
-
 # 构建
 echo "🔨 构建项目..."
 if ! npm run build; then
@@ -39,14 +39,14 @@ fi
 echo "🚀 发布包..."
 if [ "$MODE" = "test" ]; then
     # 发布到测试环境
-    npm publish --dry-run
+    npm publish --dry-run --registry https://registry.npmjs.org/
 else
     # 发布到生产环境
-    if ! npm publish; then
+    if ! npm publish --registry https://registry.npmjs.org/; then
         echo "❌ 发布失败"
         exit 1
     fi
 fi
 
 echo "✅ 共享包发布完成"
-cd - > /dev/null 
+cd - >/dev/null

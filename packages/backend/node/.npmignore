@@ -1,0 +1,43 @@
+# 排除上传目录
+uploads/
+test-uploads/
+
+# 排除测试相关文件
+tests/
+jest.config.js
+test-app.js
+coverage/
+*.test.ts
+*.test.js
+
+# 排除源文件（只发布编译后的文件）
+src/
+
+# 排除配置文件
+tsconfig.json
+.env
+.env.*
+
+# 排除开发依赖相关
+node_modules/
+package-lock.json
+
+# 排除系统文件
+.DS_Store
+Thumbs.db
+
+# 排除临时文件
+*.log
+*.tmp
+temp/
+tmp/
+
+# 排除版本控制文件
+.git/
+.gitignore
+
+# 排除编辑器配置
+.vscode/
+.idea/
+*.swp
+*.swo 

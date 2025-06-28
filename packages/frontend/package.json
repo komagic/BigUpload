@@ -1,6 +1,6 @@
 {
-    "name": "@bigupload/frontend",
-    "version": "1.0.0",
+    "name": "bigupload-frontend",
+    "version": "1.0.1",
     "main": "dist/index.js",
     "types": "dist/index.d.ts",
     "files": [
@@ -19,7 +19,7 @@
         "publish:dry": "npm publish --dry-run"
     },
     "dependencies": {
-        "@bigupload/shared": "1.0.0",
+        "bigupload-shared": "1.0.1",
         "antd": "^5.15.0",
         "@ant-design/icons": "^5.3.0",
         "axios": "^1.4.0",

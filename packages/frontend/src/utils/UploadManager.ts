@@ -3,7 +3,7 @@ import {
   UploadProgress,
   UploadResponse,
   UploadError,
-} from "@bigupload/shared";
+} from "bigupload-shared";
 
 // 直接在本地定义错误类型，避免导入问题
 enum UploadErrorType {

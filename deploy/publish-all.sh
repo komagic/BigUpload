@@ -116,9 +116,9 @@ if [ $SUCCESS_COUNT -eq $TOTAL_COUNT ]; then
     echo "🎉 所有包发布成功！"
     echo ""
     echo "📍 验证安装:"
-    echo "  npm install @bigupload/shared"
-    echo "  npm install @bigupload/frontend"
-    echo "  npm install @bigupload/node-backend"
+    echo "  npm install bigupload-shared"
+    echo "  npm install bigupload-frontend"
+    echo "  npm install bigupload-backend-node"
     echo "  pip install bigupload-fastapi"
     echo ""
     echo "📚 更新文档:"
@@ -129,4 +129,4 @@ else
     echo ""
     echo "⚠️  部分包发布失败，请检查错误信息"
     exit 1
-fi 
+fi

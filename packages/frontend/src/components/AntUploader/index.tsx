@@ -8,7 +8,7 @@ import {
 } from "@ant-design/icons";
 import type { UploadProps } from "antd";
 import { UploadManager, FileUploadState } from "../../utils/UploadManager";
-import { UploadProgress, UploadResponse, UploadError } from "@bigupload/shared";
+import { UploadProgress, UploadResponse, UploadError } from "bigupload-shared";
 
 // 格式化文件大小
 const formatFileSize = (bytes: number): string => {
